@@ -4,26 +4,20 @@ AutoHotkey script for Helldivers 2, designed to transform the player's playstyle
 This AutoHotkey script is built for Helldivers 2, designed to streamline key combinations through advanced automation and a customizable Radial Menu. Instead of memorizing complex key combinations or cluttering your keyboard with dozens of binds, you can now call any Stratagem using an intuitive visual interface.
 
 Credits:
-Original Idea: RuggedTheDragon [(Reddit link)](https://www.reddit.com/r/Helldivers/comments/1n1t6jk/ok_hear_me_outa_radial_menu_for_stratagems/)
 
-Implementation Suggestion: piedras8negras [(Nexus Mods link)](https://www.nexusmods.com/helldivers2/mods/6584?tab=posts)
-
-Updated GDI+ Library: buliasz [(GitHub link)](https://github.com/buliasz/AHKv2-Gdip)
-
-Stratagem Icons: nvigneux [(GitHub link)](https://github.com/nvigneux/Helldivers-2-Stratagems-icons-svg)
+    Original Idea: RuggedTheDragon [(Reddit link)](https://www.reddit.com/r/Helldivers/comments/1n1t6jk/ok_hear_me_outa_radial_menu_for_stratagems/)
+    Implementation Suggestion: piedras8negras [(Nexus Mods link)](https://www.nexusmods.com/helldivers2/mods/6584?tab=posts)
+    Updated GDI+ Library: buliasz [(GitHub link)](https://github.com/buliasz/AHKv2-Gdip)
+    Stratagem Icons: nvigneux [(GitHub link)](https://github.com/nvigneux/Helldivers-2-Stratagems-icons-svg)
 
 Key Features:
-Radial Stratagem Menu: A sleek, on-screen circular menu that allows you to select and activate stratagems quickly with your mouse.
 
-One-Key Activation: Assign the Radial Menu to a single hotkey (keyboard or mouse) for instant access.
-
-Input Mode Selection: Choose between Arrow keys, WASD or any custom layout for Stratagem input to match your in-game settings.
-
-User-Friendly GUI: Easily manage your Stratagem list, profiles, and settings through a graphical interface.
-
-Auto-Pause/Close: active this option to manage the state of the script automatically.
-
-Stratagem Customization: add new or edit existed stratagem as game evolve.
+    Radial Stratagem Menu: A sleek, on-screen circular menu that allows you to select and activate stratagems quickly with your mouse.
+    One-Key Activation: Assign the Radial Menu to a single hotkey (keyboard or mouse) for instant access.
+    Input Mode Selection: Choose between Arrow keys, WASD or any custom layout for Stratagem input to match your in-game settings.
+    User-Friendly GUI: Easily manage your Stratagem list, profiles, and settings through a graphical interface.
+    Auto-Pause/Close: active this option to manage the state of the script automatically.
+    Stratagem Customization: add new or edit existed stratagem as game evolve.
 
 
 Usage Instructions:
@@ -35,11 +29,9 @@ Usage Instructions:
 
 Important Notes:
 
-Window Mode: The game must be set to Windowed or Borderless Windowed mode for the Radial Menu GUI to overlay correctly.
-
-Administrator Rights: If Steam or Helldivers 2 is running as Administrator, you must run the script as Administrator as well.
-
-Layout Sensitivity: The script works best with the English keyboard layout. If you encounter any issues, manually edit the Settings.ini file or simply delete it (this will reset all saved settings and binds), then restart the script.
+    Window Mode: The game must be set to Windowed or Borderless Windowed mode for the Radial Menu GUI to overlay correctly.
+    Administrator Rights: If Steam or Helldivers 2 is running as Administrator, you must run the script as Administrator as well.
+    Layout Sensitivity: The script works best with the English keyboard layout. If you encounter any issues, manually edit the Settings.ini file or simply delete it (this will reset all saved settings and binds), then restart the script.
 
 Default Hotkeys:
 
