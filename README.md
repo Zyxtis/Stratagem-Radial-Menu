@@ -26,6 +26,14 @@ Usage Instructions:
 3. Managing Binds: Use the GUI to add (+) or remove (-) Stratagems for your active profile. Double-click (LMB) a Stratagem in the list popup to mark it as a favorite. This allows you to highlight essential Stratagems (like Reinforce or Resupply) and sort them with a single click.
 4. Using the Radial Menu: Press the Radial Menu Key to trigger the menu. While holding the key, move your mouse toward the desired Stratagem and release it to execute the macro.
 
+OCR Function Description:
+Allows the script to detect your current Stratagems during a mission and use them within the radial menu. Its functionality is based on reading the specific arrow sequences of each Stratagem.
+
+    Stratagem Scan (Default: F3): By pressing the hotkey, the OCR reads your current Stratagem arrows, automatically creates and switches to an OCR profile, and populates it with the detected Stratagems for immediate use.
+    Scrambler Bypass (Default: F4) : When enabled, the script identifies available Stratagems every time the radial menu is opened and displays them. Once a Stratagem is selected, the OCR reads the current arrow sequence on the screen and executes it automatically.
+    OCR Objective: This feature reads and executes Stratagems that are visible on the screen without needing to open the Stratagem menu. These are typically mission-specific Stratagems that appear in certain locations, such as Raising the Flag, Hellbombs, Uploading Data, etc.
+
+Note on Performance: The OCR is sensitive to color palettes and may function incorrectly in extremely bright areas of the map. If you use ReShade or other color-grading tools, the OCR may stop working entirely. In this case, you must manually extract the modified HEX color code of your Stratagem arrows and update the ArrowColor field in OCR Settings.
 
 Important Notes:
 
@@ -36,9 +44,12 @@ Important Notes:
 Default Hotkeys:
 
     F1 - Show/Hide main GUI
-    Insert — Suspends the script. Pressing Insert again will resume its operation
+    F2 - Show/Hide floating list for keybinding profiles
+    F3 - OCR Stratagem Scan
+    F4 -  Scrambler Bypass toggle
+    Insert — Suspend/Resume the script
     End — Close the script
-    Page Up / Page Down — Switches profiles forward / backward
+    Page Up / Page Down — Switches profiles forward / backward (active only while holding the Radial Menu or Floating List key) 
 
 (*)Checkbox Function Description:
 
