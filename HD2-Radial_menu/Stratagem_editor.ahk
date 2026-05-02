@@ -1,8 +1,16 @@
 #Requires AutoHotkey v2.0
-#Include config.ahk
+#Include Config\config.ahk
 
 ; Load GUI Scale from settings.ini
 LoadGUIScale()
+
+OnExit(GdiShutdownRoutine)
+
+GdiShutdownRoutine(*) {
+    global pToken
+    if pToken
+        Gdip_Shutdown(pToken)
+}
 
 ; --- ImageList for Stratagem Icons ---
 IL_ID := 0
@@ -376,17 +384,13 @@ ReloadAllData(selectId := "") {
     
     Stratagems := Map(), StratagemNames := Map(), OrderedIDs := []
     StratagemSections := Map()
+    IconIndexMap := Map()
     LoadStratagemsData()
     
-    ; Add new icons
-    for id in OrderedIDs {
-        if InStr(id, "category_") = 1 || InStr(id, "separator_") = 1
-            continue
-        if !IconIndexMap.Has(id) {
-            iconPath := FindIconPath(id)
-            IconIndexMap[id] := iconPath != "" ? IL_Add(IL_ID, iconPath, 0x00FFFFFF, 1) : 1
-        }
-    }
+    ; Rebuild ImageList with new data
+    iconSizeScaled := Scale(32)
+    IL_ID := InitIconImageList()
+    lbAvailable.SetImageList(IL_ID, 1)
     
     PopulateAvailableList()
     
