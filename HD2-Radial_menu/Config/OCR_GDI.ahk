@@ -456,8 +456,14 @@ DetectArrowDirection(bitmap, centerX, centerY) {
     ; Check if debug should be suppressed (during Scrambler bypass)
     showDebug := DebugMode && !ScramblerSuppressDebug
     
+    ; Multi-monitor fix: Offset coordinates by virtual screen origin
+    VirtualScreenLeft := SysGet(76)  ; SM_XVIRTUALSCREEN
+    VirtualScreenTop  := SysGet(77)  ; SM_YVIRTUALSCREEN
+    bitmapX := centerX - VirtualScreenLeft
+    bitmapY := centerY - VirtualScreenTop
+    
     ; Check center stability (all pixels in area must match)
-    if (!IsCenterStable(bitmap, centerX, centerY)) {
+    if (!IsCenterStable(bitmap, bitmapX, bitmapY)) {
         ; Show a cross if center read fails
         if (showDebug)
             ShowFailedCenter(centerX, centerY, "Center is unstable")
@@ -474,8 +480,8 @@ DetectArrowDirection(bitmap, centerX, centerY) {
     topPixels := []
     Loop EdgeStripSize {
         offsetX := A_Index - halfStrip - 1
-        px := centerX + offsetX
-        py := centerY - CheckDistance
+        px := bitmapX + offsetX
+        py := bitmapY - CheckDistance
         match := IsColorMatch(bitmap, px, py)
         if (match)
             topMatches++
@@ -487,8 +493,8 @@ DetectArrowDirection(bitmap, centerX, centerY) {
     bottomPixels := []
     Loop EdgeStripSize {
         offsetX := A_Index - halfStrip - 1
-        px := centerX + offsetX
-        py := centerY + CheckDistance
+        px := bitmapX + offsetX
+        py := bitmapY + CheckDistance
         match := IsColorMatch(bitmap, px, py)
         if (match)
             bottomMatches++
@@ -500,8 +506,8 @@ DetectArrowDirection(bitmap, centerX, centerY) {
     leftPixels := []
     Loop EdgeStripSize {
         offsetY := A_Index - halfStrip - 1
-        px := centerX - CheckDistance
-        py := centerY + offsetY
+        px := bitmapX - CheckDistance
+        py := bitmapY + offsetY
         match := IsColorMatch(bitmap, px, py)
         if (match)
             leftMatches++
@@ -513,8 +519,8 @@ DetectArrowDirection(bitmap, centerX, centerY) {
     rightPixels := []
     Loop EdgeStripSize {
         offsetY := A_Index - halfStrip - 1
-        px := centerX + CheckDistance
-        py := centerY + offsetY
+        px := bitmapX + CheckDistance
+        py := bitmapY + offsetY
         match := IsColorMatch(bitmap, px, py)
         if (match)
             rightMatches++
@@ -537,6 +543,23 @@ DetectArrowDirection(bitmap, centerX, centerY) {
     
     ; Debug visualization
     if (showDebug && direction != "") {
+        ; Convert bitmap coordinates back to absolute screen coordinates for debug drawing
+        Loop topPixels.Length {
+            topPixels[A_Index].x += VirtualScreenLeft
+            topPixels[A_Index].y += VirtualScreenTop
+        }
+        Loop bottomPixels.Length {
+            bottomPixels[A_Index].x += VirtualScreenLeft
+            bottomPixels[A_Index].y += VirtualScreenTop
+        }
+        Loop leftPixels.Length {
+            leftPixels[A_Index].x += VirtualScreenLeft
+            leftPixels[A_Index].y += VirtualScreenTop
+        }
+        Loop rightPixels.Length {
+            rightPixels[A_Index].x += VirtualScreenLeft
+            rightPixels[A_Index].y += VirtualScreenTop
+        }
         ShowDebugVisualization(centerX, centerY, topPixels, bottomPixels, leftPixels, rightPixels, direction, topMatches, bottomMatches, leftMatches, rightMatches)
     }
     
