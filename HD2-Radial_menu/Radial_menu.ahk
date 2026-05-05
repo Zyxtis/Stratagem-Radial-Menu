@@ -15,6 +15,7 @@ global CustomUpKey := "w", CustomDownKey := "s", CustomLeftKey := "a", CustomRig
 global MenuInputType := 5  ; 1=Tap, 2=Double Tap, 3=Press, 4=Long Press, 5=Hold
 global SuspendHotkey := "Insert", ExitHotkey := "End", DisplayToggleHotkey := "F1"
 global RadialMenuKeyWildcard := false
+global RadialMenuKeyMode := "Hold"  ; "Hold" or "Toggle"
 
 ; Radial Menu UI
 global MenuSize := 500, InnerRadius := 70, IconSize := 48, TextSize := 9, ShowText := true
@@ -355,6 +356,12 @@ mainTab.UseTab(3)
 
 settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), "Radial Menu Key:")
 global radialMenuKeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: RadialMenuKey, wildcard: RadialMenuKeyWildcard, hasWildcard: true, onChanged: OnRadialMenuKeyChange, onWildcardChanged: OnRadialMenuKeyWildcardChange, excludeKeys: ["WheelUp", "WheelDown"]})
+global radialMenuKeyModeDDL := settingsGui.Add("DropDownList", "w" Scale(70) " x+5 yp Background2f2f2f", ["Hold", "Toggle"])
+if (RadialMenuKeyMode = "Toggle")
+    radialMenuKeyModeDDL.Choose(2)
+else
+    radialMenuKeyModeDDL.Choose(1)
+radialMenuKeyModeDDL.OnEvent("Change", OnRadialMenuKeyModeChange)
 
 settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(200), "Stratagem Menu:")
 global stratagemMenuKeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: StratagemMenuKey, hasWildcard: false, onChanged: OnStratagemMenuKeyChange})
@@ -926,6 +933,7 @@ SaveSettings() {
     IniWrite(ShowText, IniPath, "Radial_Menu", "ShowText")
     IniWrite(RadialMenuKey, IniPath, "Radial_Menu", "RadialMenuKey")
     IniWrite(RadialMenuKeyWildcard, IniPath, "Radial_Menu", "RadialMenuKeyWildcard")
+    IniWrite(RadialMenuKeyMode, IniPath, "Radial_Menu", "RadialMenuKeyMode")
     
     ; Save Keybind List settings
     IniWrite(KeybindListHotkey, IniPath, "KeybindList", "ListToggleHotkey")
@@ -944,7 +952,7 @@ SaveSettings() {
 }
 
 LoadSettings() {
-    global StratagemMenuKey, RadialMenuKey, RadialMenuKeyWildcard, MenuInputType, InputLayout, PostMenuDelay, RealKeyDelay
+    global StratagemMenuKey, RadialMenuKey, RadialMenuKeyWildcard, RadialMenuKeyMode, MenuInputType, InputLayout, PostMenuDelay, RealKeyDelay
     global SuspendHotkey, ExitHotkey, MenuSize, InnerRadius, IconSize, TextSize, ShowText, ScreenCX, ScreenCY, ActiveProfile, GUIScale
     global ProfileNextHotkey, ProfilePrevHotkey, DisplayToggleHotkey
     global AutoPauseActive, AutoCloseActive, GameCheckTimerInterval, BlockCameraBypass, OpenMapKey, MapInputType
@@ -1006,6 +1014,7 @@ LoadSettings() {
         ShowText := IniRead(IniPath, "Radial_Menu", "ShowText", "1") = "1" ? true : false
         RadialMenuKey := IniRead(IniPath, "Radial_Menu", "RadialMenuKey", "MButton")
         RadialMenuKeyWildcard := IniRead(IniPath, "Radial_Menu", "RadialMenuKeyWildcard", "0") = "1" ? true : false
+        RadialMenuKeyMode := IniRead(IniPath, "Radial_Menu", "RadialMenuKeyMode", "Hold")
         
         ; Load GUI Scale
         GUIScale := Float(IniRead(IniPath, "Settings", "GUIScale", "1.0"))
@@ -1451,6 +1460,15 @@ OnRadialMenuKeyWildcardChange() {
     SaveSettings()
 }
 
+OnRadialMenuKeyModeChange(*) {
+    global RadialMenuKeyMode, radialMenuKeyModeDDL
+    if (radialMenuKeyModeDDL.Value = 2)
+        RadialMenuKeyMode := "Toggle"
+    else
+        RadialMenuKeyMode := "Hold"
+    SaveSettings()
+}
+
 OnStratagemMenuKeyChange() {
     global StratagemMenuKey, stratagemMenuKeyInput
     StratagemMenuKey := stratagemMenuKeyInput.GetValue()
@@ -1842,12 +1860,68 @@ SetRadialMenuHotkey() {
 RadialMenuDown(*) {
     global RadialMenuKey, IsMenuVisible, IsExecutingMacro, BlockCameraBypass, radialGui, SelectedSector, ForceRadialRedraw
     global ScreenCX, ScreenCY, ActiveStratagems, OCRScramblerBypassEnabled, StratagemMenuKey, MenuInputType, PostMenuDelay, MenuOpenDelay
-
-    ; Prevent re-entry - if menu is already visible, ignore additional presses
-    if (IsMenuVisible)
-        return
+    global RadialMenuKeyMode, RadialMenuToggleActive
 
     if IsExecutingMacro
+        return
+
+    ; === TOGGLE MODE: Second press confirms selection ===
+    if (IsMenuVisible && RadialMenuKeyMode = "Toggle") {
+        ; Second press in toggle mode - confirm and execute
+        SetTimer(WatchMouse, 0)
+        ShowCursor(true), ClipCursor(false)
+
+        choice := SelectedSector
+
+        if IsSet(radialGui) && radialGui {
+            radialGui.Destroy()
+            radialGui := 0
+        }
+
+        if (BlockCameraBypass) {
+            EndCameraBypass()
+        }
+
+        SetProfileSwitchHotkeys(true)
+        IsMenuVisible := false
+        RadialMenuToggleActive := false
+
+        ; Execute selected stratagem
+        if (choice > 0) {
+            if (OCRScramblerBypassEnabled) {
+                slot := Icon_GetSlotByIndex(choice)
+                if (slot > 0) {
+                    RunScramblerMacro(slot)
+                }
+                Icon_DisposeCapturedIcons()
+                global ScramblerRadialMode
+                ScramblerRadialMode := false
+                if (!BlockCameraBypass && StratagemMenuKey != "" && MenuInputType = 5) {
+                    Sleep(25)
+                    ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
+                    Sleep(25)
+                }
+            } else if (ActiveStratagems.Length > 0 && choice <= ActiveStratagems.Length) {
+                RunMacro(ActiveStratagems[choice])
+            }
+        } else if (OCRScramblerBypassEnabled) {
+            Icon_DisposeCapturedIcons()
+            global ScramblerRadialMode
+            ScramblerRadialMode := false
+            if (!BlockCameraBypass && StratagemMenuKey != "") {
+                Sleep(25)
+                if (MenuInputType = 5)
+                    ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
+                else
+                    ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
+                Sleep(25)
+            }
+        }
+        return
+    }
+
+    ; Prevent re-entry in hold mode
+    if (IsMenuVisible)
         return
 
 ; === SCRAMBLER BYPASS MODE ===
@@ -1957,6 +2031,12 @@ RadialMenuDown(*) {
     radialGui.Show("Na")
 
     SetTimer(WatchMouse, 10)
+
+    ; In toggle mode, return immediately - don't wait for key release
+    ; The second press will trigger the confirm handler
+    if (RadialMenuKeyMode = "Toggle") {
+        return
+    }
 
     ; Wait for key release
     KeyWait(RadialMenuKey)
@@ -2225,6 +2305,7 @@ global LastDrawnSector := -1
 global LastDrawnMX := 0
 global LastDrawnMY := 0
 global ForceRadialRedraw := false
+global RadialMenuToggleActive := false ; Used for toggle mode
 
 WatchMouse() {
     global SelectedSector, LastDrawnSector, LastDrawnMX, LastDrawnMY, ForceRadialRedraw
