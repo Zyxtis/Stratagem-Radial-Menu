@@ -112,6 +112,17 @@ InitIconImageList() {
         }
     }
     
+    ; Add green dot icon for assistant status display
+    greenDotPath := A_ScriptDir "\Config\icons\Green_dot.png"
+    if FileExist(greenDotPath) {
+        hBitmap := LoadPngAsHBitmap(greenDotPath, iconSizeScaled)
+        if hBitmap {
+            idx := DllCall("Comctl32.dll\ImageList_Add", "Ptr", IL_ID, "Ptr", hBitmap, "Ptr", 0) + 1
+            IconIndexMap["__green_dot__"] := idx
+            DllCall("DeleteObject", "Ptr", hBitmap)
+        }
+    }
+    
     for id in OrderedIDs {
         if InStr(id, "category_") = 1
             continue

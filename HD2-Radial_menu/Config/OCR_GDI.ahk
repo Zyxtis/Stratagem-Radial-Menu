@@ -208,6 +208,7 @@ OCR_ShowExcludeWindow() {
     btnSave.OnEvent("Click", (*) => OCR_SaveExclusionsFromList(lv))
     btnClear.OnEvent("Click", (*) => OCR_ClearExclusionsFromList(lv))
 
+    OCR_excludeGui.OnEvent("Escape", (*) => OCR_excludeGui.Destroy())
     OCR_excludeGui.Show("w380 h445 Center")
 }
 
@@ -346,7 +347,7 @@ ScanAllStratagems() {
 ; Returns first detected arrow sequence from the screen (top-to-bottom scan order)
 ; Output: Array of directions, e.g. ["Down", "Left", "Up"]
 OCR_GetFirstDetectedDirections() {
-    global StartY, StepY, MaxRows
+    global StartY, StepY, MaxRows, DebugMode
 
     ; Get screen dimensions
     ScreenWidth := A_ScreenWidth
@@ -384,6 +385,10 @@ OCR_GetFirstDetectedDirections() {
     SelectObject(hdc, obm)
     DeleteObject(hbm)
     DeleteDC(hdc)
+
+    ; Auto-clear debug visualization after 3 seconds (for OCR Objective)
+    if (DebugMode)
+        SetTimer(ClearDebugVisualization, -3000)
 
     return firstDirections
 }
@@ -1315,6 +1320,7 @@ OCR_ShowSettingsWindow() {
     }
     
     ; Show window centered on screen
+    OCR_settingsGui.OnEvent("Escape", (*) => OCR_settingsGui.Destroy())
     OCR_settingsGui.Show("Center")
 }
 

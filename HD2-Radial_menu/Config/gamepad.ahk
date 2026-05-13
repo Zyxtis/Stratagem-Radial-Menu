@@ -974,8 +974,7 @@ ShowOCRGamepadCapturePopup(*) {
 
     captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", "Press a button on your gamepad...")
     global ocrGamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", OCRGamepadButton = "" ? "[Not set]" : OCRGamepadButton)
-    captureGui.Add("Text", "x" Scale(20) " y+15 w" Scale(280) " Center cGray", "(Press Escape to cancel)")
-    captureGui.Add("Button", "x" Scale(90) " y+15 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
 
     global ocrGamepadCaptureGui := captureGui
@@ -1135,8 +1134,7 @@ ShowBypassGamepadCapturePopup(*) {
 
     captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", "Press a button on your gamepad...")
     global bypassGamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", BypassGamepadButton = "" ? "[Not set]" : BypassGamepadButton)
-    captureGui.Add("Text", "x" Scale(20) " y+15 w" Scale(280) " Center cGray", "(Press Escape to cancel)")
-    captureGui.Add("Button", "x" Scale(90) " y+15 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
 
     global bypassGamepadCaptureGui := captureGui
@@ -1301,10 +1299,8 @@ ShowGamepadCapturePopup(*) {
     ; Current button display
     global gamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", GamepadMenuButton)
     
-    captureGui.Add("Text", "x" Scale(20) " y+15 w" Scale(280) " Center cGray", "(Press Escape to cancel)")
-    
     ; Cancel button
-    captureGui.Add("Button", "x" Scale(90) " y+15 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
     
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
     
