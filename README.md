@@ -45,6 +45,7 @@ Default Hotkeys:
     Page Up / Page Down — Switches profiles forward / backward (active only while holding the Radial Menu or Floating List key) 
 
 (*)Checkbox Function Description:
+
 This adds the * operator to your hotkey. This means it will trigger regardless of whether other modifier keys (like Ctrl, Alt, Shift, or Win) are held down at the same time.
 
 AHK Designations:
@@ -64,6 +65,7 @@ AHK Designations:
 
 
 OCR Function Description:
+
 Allows the script to detect your current Stratagems during a mission and use them within the radial menu. Its functionality is based on reading the specific arrow sequences of each Stratagem.
 
     Stratagem Scan (Default: F3): By pressing the hotkey, the OCR reads your current Stratagem arrows, automatically creates and switches to an OCR profile, and populates it with the detected Stratagems for immediate use.
@@ -74,6 +76,7 @@ Note on Performance: The OCR is sensitive to color palettes and may function inc
 
 
 Weapon Assistant: 
+
 Designed for use with weapons such as the Epoch, RS-422 "Railgun", ARC-3 "Arc Thrower", PLAS-101 "Purifier", and PLAS-15 "Scythe".
 
 There are four available modes: Purifier/Arc Thrower, Railgun, Epoch, and Power Throw:
@@ -86,10 +89,13 @@ There are four available modes: Purifier/Arc Thrower, Railgun, Epoch, and Power 
 How it works:
 The script performs a predefined action cycle by automatically triggering a left-click based on the selected mode. Once launched, the script remains inactive until toggled via its assigned hotkey.
 
+Safety Catch:
+
 The Safety Catch deactivates the fire button until a designated safety key is held, preventing accidental firing. To enable this feature, tick the checkbox and enter your desired key.
 For example, if your fire key is LMB and the safety key is RMB, the macro will only execute while RMB is held. By using the tilde (~) operator, you allow the safety keypress to "pass through" to the game; this ensures the safety mechanism activates while still triggering the key's native in-game action (such as aiming).
 
 It's not recommended to activate the Weapon Assistant while the AutoHotkey GUI window is active. Clicking inside the window might cause a "stuck click" which can be resolved by pressing Esc or opening Task Manager. 
+
 
 Driver Assistant: This feature introduces automatic gear shifting to enhance vehicle responsiveness and handling. Press W to shift to first gear and S to shift to reverse. Additionally, the script automatically deactivates this functionality when you press E (the vehicle exit key).
 
