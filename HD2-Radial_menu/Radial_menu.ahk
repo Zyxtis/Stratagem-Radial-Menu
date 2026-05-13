@@ -2,6 +2,7 @@
 #Include Config\config.ahk
 #Include Config\gamepad.ahk
 #Include Config\OCR_GDI.ahk
+#Include Config\assistants.ahk
 
 ; Load GUI Scale from settings.ini
 LoadGUIScale()
@@ -51,7 +52,7 @@ global ActiveKeybindStratagems := []
 global KeybindListVisibility := Map()
 
 ; Alt Keys for DropDownList
-AltKeys := ["LControl", "RControl", "LShift", "RShift", "LAlt", "RAlt", "LWin", "RWin", "Tab", "XButton1", "XButton2", "MButton", "WheelUp", "WheelDown"]
+AltKeys := ["LControl", "RControl", "LShift", "RShift", "LAlt", "RAlt", "LWin", "RWin", "Tab", "XButton1", "XButton2", "MButton", "LButton", "RButton", "WheelUp", "WheelDown"]
 AltChoiceList := ["[Input]"]
 for key in AltKeys
     AltChoiceList.Push(key)
@@ -80,6 +81,9 @@ global OCRHoldMs := 700
 global BypassGamepadButton := ""
 global BypassUseHold := false
 global BypassHoldMs := 700
+
+; Driver Stratagem Call state tracking for scrambler bypass
+global scramblerDidSwap := false
 
 ; ===INITIALIZATION===
 StripWildcard(hotkey) {
@@ -219,6 +223,10 @@ class HotkeyInput {
 
 LoadStratagemsData()
 LoadSettings()
+LoadWeaponAssistantSettings()
+LoadDriverAssistantSettings()
+LoadInventoryManagerSettings()
+LoadWeaponQuickSwitchSettings()
 LoadFavorites()
 LoadGamepadSettings()
 
@@ -356,7 +364,7 @@ mainTab.UseTab(3)
 
 settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), "Radial Menu Key:")
 global radialMenuKeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: RadialMenuKey, wildcard: RadialMenuKeyWildcard, hasWildcard: true, onChanged: OnRadialMenuKeyChange, onWildcardChanged: OnRadialMenuKeyWildcardChange, excludeKeys: ["WheelUp", "WheelDown"]})
-global radialMenuKeyModeDDL := settingsGui.Add("DropDownList", "w" Scale(70) " x+5 yp Background2f2f2f", ["Hold", "Toggle"])
+global radialMenuKeyModeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(2.5) " Background2f2f2f", ["Hold", "Toggle"])
 if (RadialMenuKeyMode = "Toggle")
     radialMenuKeyModeDDL.Choose(2)
 else
@@ -366,8 +374,7 @@ radialMenuKeyModeDDL.OnEvent("Change", OnRadialMenuKeyModeChange)
 settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(200), "Stratagem Menu:")
 global stratagemMenuKeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: StratagemMenuKey, hasWildcard: false, onChanged: OnStratagemMenuKeyChange})
 
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(200), "Menu Input Type:")
-menuInputTypeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(5) " Background2f2f2f", ["Tap", "Double Tap", "Press", "Long Press", "Hold"])
+menuInputTypeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(2.5) " Background2f2f2f", ["Tap", "Double Tap", "Press", "Long Press", "Hold"])
 menuInputTypeDDL.Choose(MenuInputType)
 menuInputTypeDDL.OnEvent("Change", (*) => UpdateMenuInputType())
 
@@ -523,6 +530,54 @@ keybindListTransparencySlider := settingsGui.Add("Slider", "x" Scale(35) " y+" S
 keybindListTransparencySlider.OnEvent("Change", (*) => UpdateKeybindListTransparency())
 keybindListTransparencyText := settingsGui.Add("Text", "x+10 yp w" Scale(20), KeybindListTransparency)
 
+; Assistants - GroupBox
+settingsGui.Add("GroupBox", "x" Scale(25) " y" Scale(350) " w" Scale(170) " h" Scale(315), "Assistants")
+
+; Weapon Assistant label
+settingsGui.Add("Text", "x" Scale(35) " y" Scale(375) " w" Scale(150), "Weapon Assistant:")
+
+; Toggle hotkey for weapon assistant on/off
+global wpToggleInput := HotkeyInput(settingsGui, 35, 0, "", {value: ToggleWeaponHotkey, wildcard: ToggleWeaponHotkeyWildcard, hasWildcard: true, onChanged: OnWPToggleChange, onWildcardChanged: OnWPToggleWildcardChange})
+
+; Status indicator text
+global wpStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(40) " Background2A2A2A", "○ OFF")
+
+; Settings button
+btnWPSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), "Settings")
+btnWPSettings.OnEvent("Click", ShowWeaponAssistantSettings)
+
+; Driver Assistant label
+settingsGui.Add("Text", "x" Scale(35) " y+" Scale(10) " w" Scale(150), "Driver Assistant:")
+
+; Toggle hotkey for driver assistant on/off
+global daToggleInput := HotkeyInput(settingsGui, 35, 0, "", {value: ToggleDriverHotkey, wildcard: ToggleDriverHotkeyWildcard, hasWildcard: true, onChanged: OnDAToggleChange, onWildcardChanged: OnDAToggleWildcardChange})
+
+; Status indicator text
+global daStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(40) " Background2A2A2A", "○ OFF")
+
+; Settings button
+btnDASettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), "Settings")
+btnDASettings.OnEvent("Click", ShowDriverAssistantSettings)
+
+; Separator line before Inventory Manager and Weapon Quick Switch
+settingsGui.Add("Text", "x" Scale(26) " y+" Scale(7.5) " w" Scale(168) " h1" " Backgroundffffff", "")
+
+; Inventory Manager
+btnIMSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(7.5) " w" Scale(100) " h" Scale(24), "Inventory")
+btnIMSettings.OnEvent("Click", ShowInventoryManagerSettings)
+
+; Status indicator text (clickable)
+global imStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(45) " Background2A2A2A Border +Center", "○ OFF")
+imStatusText.OnEvent("Click", ToggleInventoryManagerFunc)
+
+; Weapon Quick Switch
+btnQSSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), "Quick Swap")
+btnQSSettings.OnEvent("Click", ShowWeaponQuickSwitchSettings)
+
+; Status indicator text (clickable)
+global qsStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(45) " Background2A2A2A Border +Center", "○ OFF")
+qsStatusText.OnEvent("Click", ToggleWeaponQuickSwitchFunc)
+
 ; Gamepad Settings - GroupBox
 settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(65) " w" Scale(190) " h" Scale(280), "Gamepad")
 
@@ -564,7 +619,7 @@ settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), "Status:
 global gamepadStatusText := settingsGui.Add("Text", "x" Scale(215) " y+" Scale(5) " w" Scale(170), "○ Disabled")
 
 ; OCR settings
-settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(350) " w" Scale(190) " h" Scale(300), "OCR")
+settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(350) " w" Scale(190) " h" Scale(315), "OCR")
 settingsGui.Add("Text", "x" Scale(215) " y" Scale(375) " w" Scale(110), "OCR Hotkey:")
 global ocrHotkeyInput := HotkeyInput(settingsGui, 215, 0, "", {value: OCRHotkey, wildcard: OCRHotkeyWildcard, hasWildcard: true, onChanged: OnOCRHotkeyChange, onWildcardChanged: OnOCRHotkeyWildcardChange, excludeKeys: ["WheelUp", "WheelDown"]})
 global ocrGamepadCaptureBtn := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(24) " h" Scale(24), "🎮")
@@ -612,6 +667,14 @@ SetRadialMenuHotkey()
 SetProfileSwitchHotkeys()
 SetOCRHotkey()
 SetOCRBypassToggleHotkey()
+SetWeaponAssistantHotkey()
+SetWeaponSafetyHotkey()
+SetWeaponCycleHotkey()
+UpdateWeaponAssistantStatus()
+SetDriverAssistantHotkey()
+UpdateDriverAssistantStatus()
+UpdateInventoryManagerStatus()
+UpdateWeaponQuickSwitchStatus()
 
 ; Initialize gamepad if enabled
 if (GamepadEnabled) {
@@ -1861,6 +1924,7 @@ RadialMenuDown(*) {
     global RadialMenuKey, IsMenuVisible, IsExecutingMacro, BlockCameraBypass, radialGui, SelectedSector, ForceRadialRedraw
     global ScreenCX, ScreenCY, ActiveStratagems, OCRScramblerBypassEnabled, StratagemMenuKey, MenuInputType, PostMenuDelay, MenuOpenDelay
     global RadialMenuKeyMode, RadialMenuToggleActive
+    global scramblerDidSwap
 
     if IsExecutingMacro
         return
@@ -1878,7 +1942,7 @@ RadialMenuDown(*) {
             radialGui := 0
         }
 
-        if (BlockCameraBypass) {
+        if (BlockCameraBypass && !scramblerDidSwap) {
             EndCameraBypass()
         }
 
@@ -1904,6 +1968,10 @@ RadialMenuDown(*) {
             } else if (ActiveStratagems.Length > 0 && choice <= ActiveStratagems.Length) {
                 RunMacro(ActiveStratagems[choice])
             }
+            
+            ; If driver stratagem call did a seat swap, release RMB after execution
+            if (scramblerDidSwap)
+                ReleaseDriverStratagemRMB()
         } else if (OCRScramblerBypassEnabled) {
             Icon_DisposeCapturedIcons()
             global ScramblerRadialMode
@@ -1916,6 +1984,12 @@ RadialMenuDown(*) {
                     ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
                 Sleep(25)
             }
+            
+            ; If driver stratagem call did a seat swap, release RMB immediately
+            if (scramblerDidSwap) {
+                SendInput("{RButton up}")
+                scramblerDidSwap := false
+            }
         }
         return
     }
@@ -1927,6 +2001,10 @@ RadialMenuDown(*) {
 ; === SCRAMBLER BYPASS MODE ===
     ; When enabled, capture actual icon screenshots from in-game stratagem menu
     if (OCRScramblerBypassEnabled) {
+        
+        ; If Driver Stratagem Call is enabled and Driver Assistant is active,
+        ; perform swap seats + hold RMB before opening stratagem menu
+        scramblerDidSwap := PerformDriverStratagemCall()
         
         ; Open stratagem menu first
         menuWasOpened := false
@@ -1941,8 +2019,9 @@ RadialMenuDown(*) {
         capturedCount := Icon_CaptureAllIcons()
 
         ; Close the stratagem menu after capturing only if camera bypass is active
+        ; and driver didn't already swap seats (driver already holds RMB)
         ; (otherwise keep it open so RunScramblerMacro doesn't need to reopen it)
-        if (menuWasOpened && BlockCameraBypass) {
+        if (menuWasOpened && BlockCameraBypass && !scramblerDidSwap) {
             if (MenuInputType = 5)
                 ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
             else {
@@ -1955,7 +2034,8 @@ RadialMenuDown(*) {
 
         if (capturedCount = 0) {
             ; Close the menu if it was left open when bypass is not active
-            if (menuWasOpened && !BlockCameraBypass) {
+            ; or when driver swapped (menu kept open intentionally)
+            if (menuWasOpened && (!BlockCameraBypass || scramblerDidSwap)) {
                 if (MenuInputType = 5)
                     ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
                 else {
@@ -1964,6 +2044,11 @@ RadialMenuDown(*) {
                     Sleep(25)
                     ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
                 }
+            }
+            ; If driver stratagem call did a seat swap, release RMB immediately
+            if (scramblerDidSwap) {
+                SendInput("{RButton up}")
+                scramblerDidSwap := false
             }
             ToolTip("Scrambler: No stratagems detected!", A_ScreenWidth - 200, A_ScreenHeight - 50)
             SetTimer(RemoveToolTip, -2000)
@@ -1998,7 +2083,8 @@ RadialMenuDown(*) {
     ForceRadialRedraw := true
 
     ; Lock camera if enabled (opens map + holds RMB to prevent camera movement)
-    if (BlockCameraBypass) {
+    ; Skip if driver already swapped seats (RMB already held)
+    if (BlockCameraBypass && !scramblerDidSwap) {
         StartCameraBypass()
     }
 
@@ -2053,7 +2139,8 @@ RadialMenuDown(*) {
     }
 
     ; Release camera lock if enabled
-    if (BlockCameraBypass) {
+    ; Skip if driver already swapped seats (RMB managed by ReleaseDriverStratagemRMB)
+    if (BlockCameraBypass && !scramblerDidSwap) {
         EndCameraBypass()
     }
 
@@ -2084,6 +2171,10 @@ RadialMenuDown(*) {
                     ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
                     Sleep(25)
                 }
+                
+            ; If driver stratagem call did a seat swap
+            if (scramblerDidSwap)
+                ReleaseDriverStratagemRMB()
             } else if (ActiveStratagems.Length > 0 && choice <= ActiveStratagems.Length) {
                 ; Normal mode
                 RunMacro(ActiveStratagems[choice])
@@ -2094,14 +2185,20 @@ RadialMenuDown(*) {
             global ScramblerRadialMode
             ScramblerRadialMode := false
             
-            ; Close stratagem menu if it was left open (no camera bypass)
-            if (!BlockCameraBypass && StratagemMenuKey != "") {
+            ; Close stratagem menu if it was left open (no camera bypass or driver swapped)
+            if ((!BlockCameraBypass || scramblerDidSwap) && StratagemMenuKey != "") {
                 Sleep(25)
                 if (MenuInputType = 5)
                     ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
                 else
                     ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
                 Sleep(25)
+            }
+            
+            ; If driver stratagem call did a seat swap, release RMB immediately
+            if (scramblerDidSwap) {
+                SendInput("{RButton up}")
+                scramblerDidSwap := false
             }
         }
 }
@@ -2110,12 +2207,14 @@ RadialMenuDown(*) {
 RunScramblerMacro(slot) {
     global IsExecutingMacro, StratagemMenuKey, MenuInputType, PostMenuDelay, RealKeyDelay, MenuOpenDelay
     global CustomUpKey, CustomDownKey, CustomLeftKey, CustomRightKey, InputLayout, BlockCameraBypass
+    global scramblerDidSwap
 
     IsExecutingMacro := true
 
     try {
-        ; Open stratagem menu first (only if camera bypass is active; otherwise it was kept open)
-        if (StratagemMenuKey != "" && BlockCameraBypass) {
+        ; Open stratagem menu first (only if camera bypass is active and driver didn't swap;
+        ; otherwise it was kept open from the capture phase or driver manages it)
+        if (StratagemMenuKey != "" && BlockCameraBypass && !scramblerDidSwap) {
             ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
             ; Wait for menu to fully open
             Sleep(MenuOpenDelay)
@@ -2812,6 +2911,10 @@ RunMacro(id) {
         sequence := ""
         menuWasOpened := false
 
+        ; If Driver Stratagem Call is enabled and Driver Assistant is active,
+        ; perform swap seats + hold RMB before opening stratagem menu
+        didDriverSwap := PerformDriverStratagemCall()
+
         ; The OCR sequence is first read directly from the screen; then, the menu opens to execute the captured sequence.
         if (id = "ocr_objective") {
             sequence := ResolveExecutionSequence(id)
@@ -2860,6 +2963,10 @@ RunMacro(id) {
         ; Always release hold key
         if (menuWasOpened && MenuInputType = 5)
             ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
+        
+        ; If driver stratagem call did a seat swap, release the RMB
+        if (didDriverSwap)
+            ReleaseDriverStratagemRMB()
 
         IsExecutingMacro := false
     }
@@ -2992,8 +3099,20 @@ UpdateGameCheckTimer(*) {
     }
 }
 
+; Function to restore game focus after drag mode ends
+RestoreGameFocus() {
+    global GameProcessName, GameTarget
+    ; Try to restore focus to the game window
+    try {
+        if WinExist("ahk_exe " GameProcessName) || WinExist(GameTarget) {
+            WinActivate("ahk_exe " GameProcessName)
+        }
+    }
+}
+
 GameCheck() {
     global GameTarget, GameProcessName, IsAutoPaused, ScriptSuspended, AutoPauseActive, AutoCloseActive, AutoCloseCountdownActive
+    global KeybindListDragMode
     
     ; Check if game process exists
     gameExists := GameProcessExist(GameProcessName)
@@ -3009,7 +3128,8 @@ GameCheck() {
             }
         } else {
             ; Game is not active or doesn't exist - if not auto-paused, pause
-            if (!IsAutoPaused && !A_IsSuspended) {
+            ; Skip pausing when dragging the floating keybind list to prevent drag interruption
+            if (!IsAutoPaused && !A_IsSuspended && !KeybindListDragMode) {
                 IsAutoPaused := true
                 Suspend(true)
                 UpdateStatusIndicator()
@@ -3114,6 +3234,15 @@ ToggleSuspend(*) {
     
     ScriptSuspended := A_IsSuspended
     UpdateStatusIndicator()
+
+    ; Re-register assistant hotkeys when unsuspending
+    ; (Hotkeys get unregistered when saving settings while suspended, so we need to restore them)
+    if !ScriptSuspended {
+        UpdateWeaponAssistantStatus()
+        UpdateDriverAssistantStatus()
+        UpdateInventoryManagerStatus()
+        UpdateWeaponQuickSwitchStatus()
+    }
 }
 
 ; --- CAMERA BYPASS FUNCTIONS ---
@@ -3535,23 +3664,33 @@ ShowKeybindCapture(*) {
     
     ; Title bar
     captureGui.SetFont("cFFFFFF s12")
-    captureGui.Add("Text", "x0 y0 w" Scale(320) " h" Scale(35) " Background2A2A2A Border +Center", "Set Hotkey").OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
-    captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
-    captureGui.SetFont("s11 cC4C4C4")
+    captureGui.Add("Text", "x0 y0 w" Scale(245) " h" Scale(26) " Background2A2A2A Border +Center", "Set Hotkey").OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    captureGui.Add("Button", "x+5 y0 w" Scale(26) " h" Scale(26), "X").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.SetFont("s12 cC4C4C4")
     
-    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(320) " Center", "Press a key for:")
-    captureGui.Add("Text", "x" Scale(20) " y+5 w" Scale(320) " Center cFFD700", name)
+    captureGui.Add("Text", "x" Scale(10) " y" Scale(36) " w" Scale(260) " Center", "Press a key for:")
+    captureGui.Add("Text", "x" Scale(10) " y+2 w" Scale(260) " Center cFFD700", name)
     
     currentHK := StratagemKeybinds.Has(stratID) ? StratagemKeybinds[stratID] : ""
-    captureGui.Add("Text", "x" Scale(20) " y+20 w" Scale(320) " Center cGray", "Current: " (currentHK != "" ? currentHK : "None"))
-    captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(320) " Center cGray", "(Press Escape to cancel)")
+    captureGui.Add("Text", "x" Scale(10) " y+10 w" Scale(260) " Center cGray", "Current: " (currentHK != "" ? currentHK : "None"))
     
-    ; DropDownList for alternative keys (like Radial Menu Key)
-    hkChoiceDDL := captureGui.Add("DropDownList", "x" Scale(52) " y+15 w" Scale(260) " Background2f2f2f", AltChoiceList)
+    ; DropDownList for alternative keys with wildcard checkbox
+    hkChoiceDDL := captureGui.Add("DropDownList", "x" Scale(80) " y+12 w" Scale(120) " Background2f2f2f", AltChoiceList)
     hkChoiceDDL.OnEvent("Change", (*) => SyncKeybindCaptureInputs("DDL", hkChoiceDDL, hkCtrl))
     
+    ; Wildcard checkbox
+    global hkWildcardCb
+    hkWildcardCb := captureGui.Add("CheckBox", "x+5 yp vhkWildcardCb", "*")
+    ; Check if current hotkey has wildcard prefix
+    currentWildcard := false
+    if (currentHK != "" && (SubStr(currentHK, 1, 1) = "*" || SubStr(currentHK, 1, 1) = "~")) {
+        currentWildcard := true
+        currentHK := SubStr(currentHK, 2)  ; Strip wildcard prefix for display
+    }
+    hkWildcardCb.Value := currentWildcard
+    
     ; Hotkey control
-    hkCtrl := captureGui.Add("Hotkey", "x" Scale(52) " y+10 w" Scale(260) " vHotkeyInput")
+    hkCtrl := captureGui.Add("Hotkey", "w" Scale(120) " x" Scale(80) " y+10 vHotkeyInput")
     if (currentHK != "")
         hkCtrl.Value := currentHK
     SetAltChoice(currentHK, hkChoiceDDL)
@@ -3559,15 +3698,15 @@ ShowKeybindCapture(*) {
     hkCtrl.Focus()
     
     ; Save button
-    btnSave := captureGui.Add("Button", "x" Scale(132) " y+20 w" Scale(100) " h" Scale(35) " Default", "Save")
+    btnSave := captureGui.Add("Button", "x" Scale(100) " y+15 w" Scale(80) " h" Scale(26) " Default", "Save")
     btnSave.OnEvent("Click", (*) => SaveHotkeyFromCapture(captureGui, hkChoiceDDL, hkCtrl, stratID))
     
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
     
-    captureGui.Show("w" Scale(365) " h" Scale(330))
+    captureGui.Show("w" Scale(280) " h" Scale(235))
 }
 
-; Sync function for keybind capture dialog (similar to SyncRadialMenuKeyInputs)
+; Sync function for keybind capture dialog
 SyncKeybindCaptureInputs(source, choiceDDL, hkCtrl) {
     if (source = "Hotkey") {
         ; Hotkey control changed - if it has value, set DDL to "[Input]"
@@ -3584,13 +3723,18 @@ SyncKeybindCaptureInputs(source, choiceDDL, hkCtrl) {
 }
 
 SaveHotkeyFromCapture(guiCtrl, hkChoiceDDL, hkCtrl, stratID) {
-    global StratagemKeybinds, ProfilesIniPath, ActiveKeybindProfile
+    global StratagemKeybinds, ProfilesIniPath, ActiveKeybindProfile, hkWildcardCb
     
     ; Determine hotkey value: from DropDownList if not "[Input]", else from Hotkey control
     if (hkChoiceDDL.Value != 1) {
         newHK := AltChoiceList[hkChoiceDDL.Value]
     } else {
         newHK := hkCtrl.Value
+    }
+    
+    ; Apply wildcard prefix if checkbox is checked
+    if (newHK != "" && hkWildcardCb.Value) {
+        newHK := "*" . newHK
     }
     
     ; Check if this hotkey is reserved (used in Settings or Misc tabs)
@@ -3788,12 +3932,40 @@ global KeybindListExecutingFromList := false
 UpdateKeybindListContent(lbControl) {
     global ActiveKeybindStratagems, StratagemKeybinds, StratagemNames, IconIndexMap, KeybindListVisibility
     global KeybindListShowIcon, KeybindListShowHotkey, KeybindListShowName
+    global WeaponAssistantActive, DriverAssistantActive, CurrentWeaponMode, WeaponModeNames
+    global ToggleWeaponHotkey, ToggleDriverHotkey, CycleWeaponModeHotkey, DA_E_Key
+    
+    ; Build list of assistant status rows when active
+    assistantRows := []
+    if (WeaponAssistantActive) {
+        modeName := WeaponModeNames[CurrentWeaponMode]
+        ; Show toggle hotkey / cycle hotkey
+        wpHotkey := ""
+        if (ToggleWeaponHotkey != "" && CycleWeaponModeHotkey != "")
+            wpHotkey := StrUpper(ToggleWeaponHotkey) "/" StrUpper(CycleWeaponModeHotkey)
+        else if (ToggleWeaponHotkey != "")
+            wpHotkey := StrUpper(ToggleWeaponHotkey)
+        else if (CycleWeaponModeHotkey != "")
+            wpHotkey := StrUpper(CycleWeaponModeHotkey)
+        assistantRows.Push({hotkey: wpHotkey, name: "Weapon: " modeName})
+    }
+    if (DriverAssistantActive) {
+        ; Show toggle hotkey / exit vehicle key
+        daHotkey := ""
+        if (ToggleDriverHotkey != "" && DA_E_Key != "")
+            daHotkey := StrUpper(ToggleDriverHotkey) "/" StrUpper(DA_E_Key)
+        else if (ToggleDriverHotkey != "")
+            daHotkey := StrUpper(ToggleDriverHotkey)
+        else if (DA_E_Key != "")
+            daHotkey := StrUpper(DA_E_Key)
+        assistantRows.Push({hotkey: daHotkey, name: "Driver Assistant"})
+    }
     
     ; Calculate column widths based on visible fields
     iconSizeScaled := Scale(32)
     col1Width := KeybindListShowIcon ? iconSizeScaled + Scale(6) : 0
     
-    ; Calculate hotkey column width based on longest hotkey
+    ; Calculate hotkey column width based on longest hotkey (including assistant rows)
     col2Width := 0
     if (KeybindListShowHotkey) {
         maxHotkeyLen := 0
@@ -3804,11 +3976,16 @@ UpdateKeybindListContent(lbControl) {
             if (StrLen(hotkey) > maxHotkeyLen)
                 maxHotkeyLen := StrLen(hotkey)
         }
+        ; Check assistant row hotkeys too
+        for row in assistantRows {
+            if (StrLen(row.hotkey) > maxHotkeyLen)
+                maxHotkeyLen := StrLen(row.hotkey)
+        }
         ; Approximate width: ~8px per character + padding
         col2Width := Max(Scale(40), maxHotkeyLen * Scale(8) + Scale(10))
     }
     
-    ; Calculate name column width based on longest name
+    ; Calculate name column width based on longest name or assistant rows
     col3Width := 0
     if (KeybindListShowName) {
         maxNameLen := 0
@@ -3818,6 +3995,11 @@ UpdateKeybindListContent(lbControl) {
             name := StratagemNames.Has(id) ? StratagemNames[id] : id
             if (StrLen(name) > maxNameLen)
                 maxNameLen := StrLen(name)
+        }
+        ; Check assistant row names too
+        for row in assistantRows {
+            if (StrLen(row.name) > maxNameLen)
+                maxNameLen := StrLen(row.name)
         }
         ; Approximate width: ~7px per character + padding
         col3Width := Max(Scale(80), maxNameLen * Scale(7) + Scale(15))
@@ -3856,6 +4038,15 @@ UpdateKeybindListContent(lbControl) {
         visibleCount++
     }
     
+    ; Add assistant status rows (each active assistant with green dot icon)
+    if (assistantRows.Length > 0) {
+        greenDotIdx := IconIndexMap.Has("__green_dot__") ? IconIndexMap["__green_dot__"] : 1
+        for row in assistantRows {
+            lbControl.Add("Icon" . greenDotIdx, "", KeybindListShowHotkey ? row.hotkey : "", KeybindListShowName ? row.name : "")
+            visibleCount++
+        }
+    }
+    
     ; Add "no bindings" message if list is empty
     if (visibleCount = 0) {
         lbControl.Add("", "", "", "No bindings")
@@ -3872,7 +4063,7 @@ UpdateKeybindListContent(lbControl) {
         listViewHeight := Scale(50)  ; Increased height for "No bindings" message
     } else {
         rowHeight := Scale(32) + Scale(4)
-        listViewHeight := visibleCount * rowHeight
+        listViewHeight := Max(Scale(50), visibleCount * rowHeight)  ; Ensure minimum height to prevent flattening
     }
     listHeight := Scale(25) + listViewHeight
     
@@ -3929,6 +4120,8 @@ KeybindListHandler(*) {
                 IniWrite(y, IniPath, "KeybindList", "PosY")
             }
         }
+        ; Restore focus to game window after drag completes
+        RestoreGameFocus()
     } else if (KeybindListExecutingFromList) {
         ; Stratagem was executed from list while key was released
         ; Switch profile hotkeys back to pass-through mode
@@ -4052,9 +4245,9 @@ RefreshKeybindListIfVisible() {
     ; Resize ListView
     lbKeybindList.Move(,, listWidth, listViewHeight)
     
-    ; Always resize window to fit content
+    ; Always resize window to fit content (NO activation - preserve game focus)
     WinGetPos(&x, &y,,, "ahk_id " KeybindListGui.Hwnd)
-    KeybindListGui.Show("x" x " y" y " w" listWidth " h" listHeight)
+    KeybindListGui.Show("Na x" x " y" y " w" listWidth " h" listHeight)
     
     ; Show() resets transparency, so we need to set it again
     ; Use opaque (255) in drag mode, otherwise use configured transparency
@@ -4095,6 +4288,8 @@ ExecuteStratagemFromList(*) {
         KeybindListGui.Hide()
     }
     
+    ; Restore game focus before executing stratagem
+    RestoreGameFocus()
     ; Execute the stratagem
     ExecuteStratagemByKeybind(stratID)
     
@@ -4116,7 +4311,6 @@ ExecuteStratagemFromList(*) {
 
 ; Initialize keybind list hotkey on startup
 SetKeybindListHotkey()
-
 
 UpdateKeybindListTransparency(*) {
     global KeybindListTransparency, keybindListTransparencySlider, keybindListTransparencyText, KeybindListGui
