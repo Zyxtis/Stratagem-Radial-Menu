@@ -254,7 +254,9 @@ OCR_InitScaling() {
     global ArrowStartX, ArrowStartY, ArrowStepX, ArrowStepY, ArrowCheckDistance, ArrowEdgeStripSize, ArrowCenterStability
     global HUDScale
     
-    ScaleX := A_ScreenWidth / BaseWidth
+    ; Possible ultra-wide screens fix: Limit effective width to 16:9 ratio to prevent excessive horizontal scaling
+    effectiveWidth := Min(A_ScreenWidth, Round(A_ScreenHeight * 16 / 9))
+    ScaleX := effectiveWidth / BaseWidth
     ScaleY := A_ScreenHeight / BaseHeight
     
     HUDScaleFactor := HUDScale / 0.90
