@@ -550,6 +550,7 @@ global DA_GearDown_Key := "Ctrl"
 global DA_StratagemCallEnabled := false
 global DA_ForwardGearMode := 1 ; 1=1st gear, 2=2nd gear, 3=D gear
 global DA_ForwardGearModeNames := ["1st Gear", "2nd Gear", "D Gear"]
+global DA_EnhancedGearSwitch := false ; if true, press forward after reverse shifts directly to chosen gear
 
 global daStatusText := 0
 global daSettingsGui := 0
@@ -623,12 +624,12 @@ UpdateDriverAssistantStatus() {
 
 ; --- Macro for configurable forward key ---
 ; Gear modes:
-;   1 = 1st Gear: 4 gear ups + 1 gear down (current default)
-;   2 = 2nd Gear: 4 gear ups + 0 gear downs
-;   3 = D Gear:   4 gear ups + 2 gear downs
+;   1 = 1st Gear: 4 gear ups + 1 gear down (original), or 3 gear ups from reverse (enhanced)
+;   2 = 2nd Gear: 4 gear ups + 0 gear downs (original), or 4 gear ups from reverse (enhanced)
+;   3 = D Gear:   4 gear ups + 2 gear downs (original), or 2 gear ups from reverse (enhanced)
 DriverMacroWFunc(*) {
-    global DriverAssistantActive, ScriptSuspended, DADriverLastKey, DA_W_Key
-    global DA_GearUp_Key, DA_GearDown_Key, DA_ForwardGearMode
+    global DriverAssistantActive, ScriptSuspended, DADriverLastKey, DA_W_Key, DA_S_Key
+    global DA_GearUp_Key, DA_GearDown_Key, DA_ForwardGearMode, DA_EnhancedGearSwitch
     
     if (!DriverAssistantActive || ScriptSuspended)
         return
@@ -637,34 +638,57 @@ DriverMacroWFunc(*) {
     If (DADriverLastKey = DA_W_Key) {
         Return
     }
+    
+    ; Save whether we came from reverse before updating DADriverLastKey
+    cameFromReverse := DA_EnhancedGearSwitch && (DADriverLastKey = DA_S_Key)
     DADriverLastKey := DA_W_Key
     
-    ; Always shift up 4 times to get from reverse to top forward gear
-    Loop 4
-    {
-        SendInput("{" DA_GearUp_Key " down}")
-        Sleep 25
-        SendInput("{" DA_GearUp_Key " up}")
-        Sleep 25
+    if (cameFromReverse) {
+        ; Enhanced gear switch: coming from reverse, shift up directly to chosen gear
+        ; Gear order: Reverse(2) -> Neutral(1) -> D -> 1st -> 2nd
+        ; From reverse: D=2 ups, 1st=3 ups, 2nd=4 ups
+        gearUpCount := 4 ; default to 2nd gear (4 ups)
+        if (DA_ForwardGearMode = 3) ; D Gear - 2 gear ups from reverse
+            gearUpCount := 2
+        else if (DA_ForwardGearMode = 1) ; 1st Gear - 3 gear ups from reverse
+            gearUpCount := 3
+        ; Mode 2 (2nd Gear) stays at 4
+        
+        Loop gearUpCount
+        {
+            SendInput("{" DA_GearUp_Key " down}")
+            Sleep 25
+            SendInput("{" DA_GearUp_Key " up}")
+            Sleep 25
+        }
+    } else {
+        ; Original behavior: shift up 4 times to top, then shift down to selected gear
+        Loop 4
+        {
+            SendInput("{" DA_GearUp_Key " down}")
+            Sleep 25
+            SendInput("{" DA_GearUp_Key " up}")
+            Sleep 25
+        }
+        
+        ; Shift down based on selected gear mode
+        if (DA_ForwardGearMode = 1) { ; 1st Gear - one gear down from top
+            SendInput("{" DA_GearDown_Key " down}")
+            Sleep 25
+            SendInput("{" DA_GearDown_Key " up}")
+            Sleep 25
+        } else if (DA_ForwardGearMode = 3) { ; D Gear - two gear downs from top
+            SendInput("{" DA_GearDown_Key " down}")
+            Sleep 25
+            SendInput("{" DA_GearDown_Key " up}")
+            Sleep 25
+            SendInput("{" DA_GearDown_Key " down}")
+            Sleep 25
+            SendInput("{" DA_GearDown_Key " up}")
+            Sleep 25
+        }
+        ; Mode 2 (2nd Gear): no gear downs needed
     }
-    
-    ; Shift down based on selected gear mode
-    if (DA_ForwardGearMode = 1) { ; 1st Gear - one gear down from top
-        SendInput("{" DA_GearDown_Key " down}")
-        Sleep 25
-        SendInput("{" DA_GearDown_Key " up}")
-        Sleep 25
-    } else if (DA_ForwardGearMode = 3) { ; D Gear - two gear downs from top (one more than default)
-        SendInput("{" DA_GearDown_Key " down}")
-        Sleep 25
-        SendInput("{" DA_GearDown_Key " up}")
-        Sleep 25
-        SendInput("{" DA_GearDown_Key " down}")
-        Sleep 25
-        SendInput("{" DA_GearDown_Key " up}")
-        Sleep 25
-    }
-    ; Mode 2 (2nd Gear): no gear downs needed
     
     KeyWait(DA_W_Key)
 }
@@ -760,8 +784,12 @@ ShowDriverAssistantSettings(*) {
     global daGearModeDDL := daSettingsGui.Add("DropDownList", "x" Scale(10) " y+" Scale(5) " w" Scale(100) " Background2f2f2f", DA_ForwardGearModeNames)
     daGearModeDDL.Choose(DA_ForwardGearMode)
     
+    ; Enhanced Gear Switch checkbox
+    global daEnhancedCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(20) " vDA_EnhancedGearSwitch", "Enhanced Gear Switch")
+    daEnhancedCb.Value := DA_EnhancedGearSwitch
+    
     ; Driver Stratagem Call checkbox
-    global daStratagemCallCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(20) " vDA_StratagemCallEnabled", "Driver Stratagem Call")
+    global daStratagemCallCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(10) " vDA_StratagemCallEnabled", "Driver Stratagem Call")
     daStratagemCallCb.Value := DA_StratagemCallEnabled
     
     ; Save button
@@ -777,7 +805,7 @@ SaveDriverAssistantSettingsPopup(*) {
     global daSettingsGui, IniPath
     global DA_W_Key, DA_S_Key, DA_E_Key, DA_C_Key, DA_GearUp_Key, DA_GearDown_Key, DA_StratagemCallEnabled
     global daWInput, daSInput, daEInput, daCInput, daGearUpInput, daGearDownInput, daStratagemCallCb
-    global DA_ForwardGearMode, daGearModeDDL
+    global DA_ForwardGearMode, daGearModeDDL, DA_EnhancedGearSwitch, daEnhancedCb
     
     ; Read values from inputs
     DA_W_Key := daWInput.GetValue() != "" ? daWInput.GetValue() : "w"
@@ -788,6 +816,7 @@ SaveDriverAssistantSettingsPopup(*) {
     DA_GearDown_Key := daGearDownInput.GetValue() != "" ? daGearDownInput.GetValue() : "Ctrl"
     DA_StratagemCallEnabled := daStratagemCallCb.Value
     DA_ForwardGearMode := daGearModeDDL.Value
+    DA_EnhancedGearSwitch := daEnhancedCb.Value
     
     ; Save all settings to INI
     SaveDriverAssistantSettings()
@@ -868,7 +897,7 @@ ReleaseDriverStratagemRMB(*) {
 SaveDriverAssistantSettings() {
     global IniPath, ToggleDriverHotkey, ToggleDriverHotkeyWildcard
     global DA_W_Key, DA_S_Key, DA_E_Key, DA_C_Key, DA_GearUp_Key, DA_GearDown_Key
-    global DA_StratagemCallEnabled, DA_ForwardGearMode
+    global DA_StratagemCallEnabled, DA_ForwardGearMode, DA_EnhancedGearSwitch
     
     IniWrite(ToggleDriverHotkey, IniPath, "DriverAssistant", "ToggleHotkey")
     IniWrite(ToggleDriverHotkeyWildcard ? "1" : "0", IniPath, "DriverAssistant", "ToggleHotkeyWildcard")
@@ -880,13 +909,14 @@ SaveDriverAssistantSettings() {
     IniWrite(DA_GearDown_Key, IniPath, "DriverAssistant", "DA_GearDown_Key")
     IniWrite(DA_StratagemCallEnabled ? "1" : "0", IniPath, "DriverAssistant", "DA_StratagemCallEnabled")
     IniWrite(DA_ForwardGearMode, IniPath, "DriverAssistant", "DA_ForwardGearMode")
+    IniWrite(DA_EnhancedGearSwitch ? "1" : "0", IniPath, "DriverAssistant", "DA_EnhancedGearSwitch")
 }
 
 ; Load settings from INI
 LoadDriverAssistantSettings() {
     global IniPath, ToggleDriverHotkey, ToggleDriverHotkeyWildcard
     global DA_W_Key, DA_S_Key, DA_E_Key, DA_C_Key, DA_GearUp_Key, DA_GearDown_Key
-    global DA_StratagemCallEnabled, DA_ForwardGearMode
+    global DA_StratagemCallEnabled, DA_ForwardGearMode, DA_EnhancedGearSwitch
     
     try {
         ToggleDriverHotkey := IniRead(IniPath, "DriverAssistant", "ToggleHotkey", "")
@@ -899,6 +929,7 @@ LoadDriverAssistantSettings() {
         DA_GearDown_Key := IniRead(IniPath, "DriverAssistant", "DA_GearDown_Key", "Ctrl")
         DA_StratagemCallEnabled := IniRead(IniPath, "DriverAssistant", "DA_StratagemCallEnabled", "0") = "1" ? true : false
         DA_ForwardGearMode := Integer(IniRead(IniPath, "DriverAssistant", "DA_ForwardGearMode", "1"))
+        DA_EnhancedGearSwitch := IniRead(IniPath, "DriverAssistant", "DA_EnhancedGearSwitch", "0") = "1" ? true : false
     } catch {
         ; Defaults are already set in global variables
     }

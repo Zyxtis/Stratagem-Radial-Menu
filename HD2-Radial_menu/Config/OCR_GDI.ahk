@@ -29,10 +29,10 @@ global ArrowExtractedColorTolerance := 10  ; Tolerance for matching edges using 
 ; Detection method: 0 = Color Detection (default GDI), 1 = Shape Detection (FindText)
 global OCR_DetectionMethod := 0
 
-; Shape detection fault tolerance (percentage, default 20% = 0.20)
+; Shape detection fault tolerance (percentage, default 15% = 0.15)
 ; Higher tolerance handles bright backgrounds (snow planets) where arrow
 ; contrast is reduced and grayscale matching needs more leeway
-global OCR_ShapeFaultTolerance := 0.20
+global OCR_ShapeFaultTolerance := 0.15
 
 ; Other settings
 global MaxArrowsPerRow := 10       ; Maximum arrows per row
@@ -103,7 +103,7 @@ OCR_LoadSettingsFromIni() {
         MenuOpenDelay := Number(IniRead(OCR_IniPath, section, "MenuOpenDelay", MenuOpenDelay))
         HUDScale := Number(IniRead(OCR_IniPath, section, "HUDScale", HUDScale))
         OCR_DetectionMethod := Number(IniRead(OCR_IniPath, section, "DetectionMethod", OCR_DetectionMethod))
-        OCR_ShapeFaultTolerance := Number(IniRead(OCR_IniPath, section, "ShapeFaultTolerance", OCR_ShapeFaultTolerance))
+        OCR_ShapeFaultTolerance := Number(IniRead(OCR_IniPath, section, "ShapeFaultTolerance", 0.15))
         
         ; Load icon capture settings
         IconSizeOCR := Number(IniRead(OCR_IniPath, section, "IconSizeOCR", IconSizeOCR))
@@ -112,7 +112,7 @@ OCR_LoadSettingsFromIni() {
         IconVerticalStep := Number(IniRead(OCR_IniPath, section, "IconVerticalStep", IconVerticalStep))
         
         ; Load pattern selection
-        OCR_UseGray2Two := IniRead(OCR_IniPath, section, "UseGray2Two", "1") = "1"
+        OCR_UseGray2Two := IniRead(OCR_IniPath, section, "UseGray2Two", "0") = "1"
         OCR_UseGrayDiff2Two := IniRead(OCR_IniPath, section, "UseGrayDiff2Two", "1") = "1"
         
         ; Load custom resolution settings
@@ -803,7 +803,7 @@ GetArrowFindTextStrings() {
 }
 
 ; Pattern data selection: flags to choose which FindText patterns to use
-global OCR_UseGray2Two := true
+global OCR_UseGray2Two := false
 global OCR_UseGrayDiff2Two := true
 
 ; One pattern per direction
@@ -2017,12 +2017,12 @@ OCR_ShowSettingsWindow() {
     groupShape := OCR_settingsGui.Add("GroupBox", "x310 y315 w280 h200", "Shape Detection")
     ; Current template info
     currentTemplate := OCR_GetShapeTemplateResolution()
-    OCR_settingsGui.Add("Text", "x320 y340 w240", "Template: " currentTemplate " (auto-detected)")
+    global OCR_templateText := OCR_settingsGui.Add("Text", "x320 y340 w240", "Template: " currentTemplate " (current)")
     ; Custom shape template selection
     global chkUseCustomShapeTemplate := OCR_settingsGui.Add("CheckBox", "x320 y+15 vChkUseCustomTemplate", "Use custom shape template")
     chkUseCustomShapeTemplate.Value := OCR_UseCustomShapeTemplate
     global edtCustomShapeTemplate := OCR_settingsGui.Add("DropDownList", "x340 y+5 w120", ["1080p", "1440p", "2160p"])
-    ; Set the DDL to the current custom template value, or auto-detected if not set
+    ; Set the DDL to the current custom template value
     shapeTemplateChoice := OCR_CustomShapeTemplate
     if (shapeTemplateChoice = "")
         shapeTemplateChoice := OCR_GetShapeTemplateResolution()
@@ -2107,6 +2107,10 @@ OCR_ShowSettingsWindow() {
         Icon_InitScaling()
         OCR_SaveSettingsToIni()
         
+        ; Update the template display text to reflect the new template
+        newTemplate := OCR_GetShapeTemplateResolution()
+        try OCR_templateText.Text := "Template: " newTemplate " (current)"
+        
         ; Force shape pattern re-initialization on next scan
         ; This makes pattern selection (Gray2Two/GrayDiff2Two) take effect immediately
         ShapeResetCache()
@@ -2164,13 +2168,17 @@ OCR_ShowSettingsWindow() {
         Icon_InitScaling()
         OCR_SaveSettingsToIni()
 
+        ; Update the template display text after reset
+        newTemplate := OCR_GetShapeTemplateResolution()
+        try OCR_templateText.Text := "Template: " newTemplate " (current)"
+
         ; Refresh controls with default values
-        OCR_ShapeFaultTolerance := 0.20
-        OCR_UseGray2Two := true
+        OCR_ShapeFaultTolerance := 0.15
+        OCR_UseGray2Two := false
         OCR_UseGrayDiff2Two := true
         edtDetectionMethod.Choose(1)
-        edtFaultTolerance.Value := "20%"
-        chkUseGray2Two.Value := true
+        edtFaultTolerance.Value := "15%"
+        chkUseGray2Two.Value := false
         chkUseGrayDiff2Two.Value := true
         edtArrowStartX.Value := ArrowStartX
         edtArrowStartY.Value := ArrowStartY
