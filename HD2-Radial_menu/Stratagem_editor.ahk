@@ -273,10 +273,10 @@ ShowStratagemEditor(editId) {
         editorNameEdit.Value := StratagemNames[editId]
     
     editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(60), "Category:")
-    editorCategoryDDL := editDlg.Add("DropDownList", "x+5 w" Scale(200) " Background" ThemeControlColor, ["Defensive Stratagems", "Offensive Stratagems", "Supply Stratagems", "Mission Stratagems"])
+    editorCategoryDDL := editDlg.Add("DropDownList", "x+5 w" Scale(200) " Background" ThemeControlColor, ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"])
     
     if isEdit && StratagemSections.Has(editId) {
-        categories := ["Defensive Stratagems", "Offensive Stratagems", "Supply Stratagems", "Mission Stratagems"]
+        categories := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
         for idx, cat in categories {
             if (cat = StratagemSections[editId]) {
                 editorCategoryDDL.Choose(idx)
@@ -453,7 +453,7 @@ SaveStratagemToIni(id, name, seq, section := "Defensive Stratagems") {
     sections[section].Push(entryLine)
     
     ; Rebuild file
-    sectionOrder := ["Defensive Stratagems", "Offensive Stratagems", "Supply Stratagems", "Mission Stratagems"]
+    sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
     finalContent := ""
     firstSection := true
     
@@ -526,7 +526,7 @@ SaveStratagemOrder() {
     }
     
     newContent := ""
-    sectionOrder := ["Defensive Stratagems", "Offensive Stratagems", "Supply Stratagems", "Mission Stratagems"]
+    sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
     
     for sectionName in sectionOrder {
         if !sections.Has(sectionName)

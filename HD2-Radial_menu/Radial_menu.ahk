@@ -33,6 +33,22 @@ global AutoPauseActive := false, AutoCloseActive := false, AutoCloseCountdownAct
 global GameCheckTimerInterval := 500, GameTarget := "HELLDIVERS™ 2", GameProcessName := "helldivers2.exe"
 global ScriptSuspended := false, IsAutoPaused := false, StatusText := 0
 
+; Auto Language Switch
+global AutoLanguageSwitch := false  ; Toggle for automatic language switch to English (off by default)
+global AutoLanguageLayout := "00000409"  ; Keyboard layout code for automatic switch
+global EnglishLayouts := Map(
+    "00000409", "English (US)",
+    "00000809", "English (UK)",
+    "00001009", "English (Canada)",
+    "00001809", "English (Ireland)",
+    "00001409", "English (New Zealand)",
+    "00004009", "English (India)",
+    "00010407", "German (IBM)",
+    "0000040c", "French (AZERTY)"
+)
+global EnglishLayoutCodes := ["00000409", "00000809", "00001009", "00001809", "00001409", "00004009", "00010407", "0000040c"]
+global EnglishLayoutNames := ["English (US)", "English (UK)", "English (Canada)", "English (Ireland)", "English (New Zealand)", "English (India)", "German (IBM)", "French (AZERTY)"]
+
 ; Camera Bypass
 global BlockCameraBypass := false, OpenMapKey := "Tab", MapInputType := 1, CameraBypassActive := false
 
@@ -105,9 +121,13 @@ SetAltChoice(hotkeyValue, controlName) {
 
 ; Switch to English keyboard layout
 SwitchToEnglishLayout() {
-    ; Load and activate English US keyboard layout (0x0409)
+    global AutoLanguageSwitch, AutoLanguageLayout
+    ; Only switch layout if automatic language switching is enabled
+    if (!AutoLanguageSwitch)
+        return
+    ; Load and activate the selected English keyboard layout
     ; KLF_ACTIVATE = 1 - activates the layout for the current thread
-    DllCall("LoadKeyboardLayout", "Str", "00000409", "UInt", 1, "Ptr")
+    DllCall("LoadKeyboardLayout", "Str", AutoLanguageLayout, "UInt", 1, "Ptr")
 }
 
 ; ===UNIVERSAL HOTKEY INPUT CLASS===
@@ -496,6 +516,22 @@ gameCheckTimerEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(265) " y+
 settingsGui.Add("Text", "x+5 yp w" Scale(80), "(ms) Interval")
 gameCheckTimerEdit.OnEvent("Change", (*) => UpdateGameCheckTimer())
 
+; Auto Language Switch - GroupBox
+settingsGui.Add("GroupBox", "x" Scale(255) " y" Scale(600) " w" Scale(145) " h" Scale(70), "Auto Language Switch")
+settingsGui.Add("Text", "x" Scale(265) " y" Scale(618) " w" Scale(70), "Auto Lang:")
+autoLangCheckbox := settingsGui.Add("CheckBox", "x+5 yp vAutoLanguageSwitch")
+autoLangCheckbox.Value := AutoLanguageSwitch
+autoLangCheckbox.OnEvent("Click", (*) => ToggleAutoLanguageSwitch())
+
+autoLangLayoutDDL := settingsGui.Add("DropDownList", "x" Scale(260) " y+" Scale(5) " w" Scale(135) " Background2f2f2f", EnglishLayoutNames)
+; Find and select current layout
+for idx, code in EnglishLayoutCodes {
+    if (code = AutoLanguageLayout) {
+        autoLangLayoutDDL.Choose(idx)
+        break
+    }
+}
+autoLangLayoutDDL.OnEvent("Change", UpdateAutoLanguageLayout)
 ; ---Tab 4: Misc---
 mainTab.UseTab(4)
 
@@ -1018,7 +1054,7 @@ LoadSettings() {
     global StratagemMenuKey, RadialMenuKey, RadialMenuKeyWildcard, RadialMenuKeyMode, MenuInputType, InputLayout, PostMenuDelay, RealKeyDelay
     global SuspendHotkey, ExitHotkey, MenuSize, InnerRadius, IconSize, TextSize, ShowText, ScreenCX, ScreenCY, ActiveProfile, GUIScale
     global ProfileNextHotkey, ProfilePrevHotkey, DisplayToggleHotkey
-    global AutoPauseActive, AutoCloseActive, GameCheckTimerInterval, BlockCameraBypass, OpenMapKey, MapInputType
+    global AutoPauseActive, AutoCloseActive, GameCheckTimerInterval, AutoLanguageSwitch, AutoLanguageLayout, BlockCameraBypass, OpenMapKey, MapInputType
     global CustomUpKey, CustomDownKey, CustomLeftKey, CustomRightKey
     global KeybindListHotkey, KeybindListHotkeyWildcard, KeybindListTransparency, KeybindListDragDelay, KeybindListShowIcon, KeybindListShowHotkey, KeybindListShowName
     global OCRHotkey, OCRHotkeyWildcard, OCRBypassToggleHotkey, OCRBypassToggleHotkeyWildcard
@@ -1063,6 +1099,8 @@ LoadSettings() {
         AutoPauseActive := IniRead(IniPath, "Settings", "AutoPauseActive", "0") = "1" ? true : false
         AutoCloseActive := IniRead(IniPath, "Settings", "AutoCloseActive", "0") = "1" ? true : false
         GameCheckTimerInterval := Integer(IniRead(IniPath, "Settings", "GameCheckTimerInterval", "500"))
+        AutoLanguageSwitch := IniRead(IniPath, "Settings", "AutoLanguageSwitch", "0") = "1" ? true : false
+        AutoLanguageLayout := IniRead(IniPath, "Settings", "AutoLanguageLayout", "00000409")
         
         ; Load Camera bypass settings
         BlockCameraBypass := IniRead(IniPath, "Radial_Menu", "BlockCameraBypass", "0") = "1" ? true : false
@@ -3079,6 +3117,21 @@ ToggleAutoClose(*) {
         SetTimer(GameCheck, GameCheckTimerInterval)
     } else {
         SetTimer(GameCheck, 0)
+    }
+}
+
+ToggleAutoLanguageSwitch(*) {
+    global AutoLanguageSwitch, autoLangCheckbox
+    AutoLanguageSwitch := autoLangCheckbox.Value
+    IniWrite(AutoLanguageSwitch ? "1" : "0", IniPath, "Settings", "AutoLanguageSwitch")
+}
+
+UpdateAutoLanguageLayout(*) {
+    global AutoLanguageLayout, autoLangLayoutDDL, EnglishLayoutCodes
+    selectedIdx := autoLangLayoutDDL.Value
+    if (selectedIdx > 0 && selectedIdx <= EnglishLayoutCodes.Length) {
+        AutoLanguageLayout := EnglishLayoutCodes[selectedIdx]
+        IniWrite(AutoLanguageLayout, IniPath, "Settings", "AutoLanguageLayout")
     }
 }
 
