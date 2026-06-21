@@ -548,6 +548,8 @@ global DA_C_Key := "c"
 global DA_GearUp_Key := "Shift"
 global DA_GearDown_Key := "Ctrl"
 global DA_StratagemCallEnabled := false
+global DA_ForwardGearMode := 1 ; 1=1st gear, 2=2nd gear, 3=D gear
+global DA_ForwardGearModeNames := ["1st Gear", "2nd Gear", "D Gear"]
 
 global daStatusText := 0
 global daSettingsGui := 0
@@ -620,8 +622,13 @@ UpdateDriverAssistantStatus() {
 }
 
 ; --- Macro for configurable forward key ---
+; Gear modes:
+;   1 = 1st Gear: 4 gear ups + 1 gear down (current default)
+;   2 = 2nd Gear: 4 gear ups + 0 gear downs
+;   3 = D Gear:   4 gear ups + 2 gear downs
 DriverMacroWFunc(*) {
     global DriverAssistantActive, ScriptSuspended, DADriverLastKey, DA_W_Key
+    global DA_GearUp_Key, DA_GearDown_Key, DA_ForwardGearMode
     
     if (!DriverAssistantActive || ScriptSuspended)
         return
@@ -632,6 +639,7 @@ DriverMacroWFunc(*) {
     }
     DADriverLastKey := DA_W_Key
     
+    ; Always shift up 4 times to get from reverse to top forward gear
     Loop 4
     {
         SendInput("{" DA_GearUp_Key " down}")
@@ -639,10 +647,25 @@ DriverMacroWFunc(*) {
         SendInput("{" DA_GearUp_Key " up}")
         Sleep 25
     }
-    SendInput("{" DA_GearDown_Key " down}")
-    Sleep 25
-    SendInput("{" DA_GearDown_Key " up}")
-    Sleep 25
+    
+    ; Shift down based on selected gear mode
+    if (DA_ForwardGearMode = 1) { ; 1st Gear - one gear down from top
+        SendInput("{" DA_GearDown_Key " down}")
+        Sleep 25
+        SendInput("{" DA_GearDown_Key " up}")
+        Sleep 25
+    } else if (DA_ForwardGearMode = 3) { ; D Gear - two gear downs from top (one more than default)
+        SendInput("{" DA_GearDown_Key " down}")
+        Sleep 25
+        SendInput("{" DA_GearDown_Key " up}")
+        Sleep 25
+        SendInput("{" DA_GearDown_Key " down}")
+        Sleep 25
+        SendInput("{" DA_GearDown_Key " up}")
+        Sleep 25
+    }
+    ; Mode 2 (2nd Gear): no gear downs needed
+    
     KeyWait(DA_W_Key)
 }
 
@@ -707,7 +730,7 @@ ShowDriverAssistantSettings(*) {
     daSettingsGui.MarginX := Scale(10)
     daSettingsGui.MarginY := Scale(10)
     
-    ; Forward key
+    ; Forward Key
     daSettingsGui.Add("Text", "x" Scale(10) " y" Scale(15) " w" Scale(100), "Forward Key:")
     global daWInput := HotkeyInput(daSettingsGui, 10, 0, "", {value: DA_W_Key, hasWildcard: false})
     
@@ -731,10 +754,14 @@ ShowDriverAssistantSettings(*) {
     ; Gear Down key
     daSettingsGui.Add("Text", "x" Scale(10) " y+" Scale(15) " w" Scale(100), "Gear Down Key:")
     global daGearDownInput := HotkeyInput(daSettingsGui, 10, 0, "", {value: DA_GearDown_Key, hasWildcard: false})
+
+    ; Forward Gear Mode dropdown
+    daSettingsGui.Add("Text", "x" Scale(10) " y+" Scale(15) " w" Scale(100), "Forward Gear:")
+    global daGearModeDDL := daSettingsGui.Add("DropDownList", "x" Scale(10) " y+" Scale(5) " w" Scale(100) " Background2f2f2f", DA_ForwardGearModeNames)
+    daGearModeDDL.Choose(DA_ForwardGearMode)
     
     ; Driver Stratagem Call checkbox
-    daSettingsGui.Add("Text", "x" Scale(10) " y+" Scale(15) " w" Scale(130), "Driver Stratagem Call:")
-    global daStratagemCallCb := daSettingsGui.Add("CheckBox", "x+" Scale(5) " yp vDA_StratagemCallEnabled")
+    global daStratagemCallCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(20) " vDA_StratagemCallEnabled", "Driver Stratagem Call")
     daStratagemCallCb.Value := DA_StratagemCallEnabled
     
     ; Save button
@@ -750,6 +777,7 @@ SaveDriverAssistantSettingsPopup(*) {
     global daSettingsGui, IniPath
     global DA_W_Key, DA_S_Key, DA_E_Key, DA_C_Key, DA_GearUp_Key, DA_GearDown_Key, DA_StratagemCallEnabled
     global daWInput, daSInput, daEInput, daCInput, daGearUpInput, daGearDownInput, daStratagemCallCb
+    global DA_ForwardGearMode, daGearModeDDL
     
     ; Read values from inputs
     DA_W_Key := daWInput.GetValue() != "" ? daWInput.GetValue() : "w"
@@ -759,6 +787,7 @@ SaveDriverAssistantSettingsPopup(*) {
     DA_GearUp_Key := daGearUpInput.GetValue() != "" ? daGearUpInput.GetValue() : "Shift"
     DA_GearDown_Key := daGearDownInput.GetValue() != "" ? daGearDownInput.GetValue() : "Ctrl"
     DA_StratagemCallEnabled := daStratagemCallCb.Value
+    DA_ForwardGearMode := daGearModeDDL.Value
     
     ; Save all settings to INI
     SaveDriverAssistantSettings()
@@ -839,7 +868,7 @@ ReleaseDriverStratagemRMB(*) {
 SaveDriverAssistantSettings() {
     global IniPath, ToggleDriverHotkey, ToggleDriverHotkeyWildcard
     global DA_W_Key, DA_S_Key, DA_E_Key, DA_C_Key, DA_GearUp_Key, DA_GearDown_Key
-    global DA_StratagemCallEnabled
+    global DA_StratagemCallEnabled, DA_ForwardGearMode
     
     IniWrite(ToggleDriverHotkey, IniPath, "DriverAssistant", "ToggleHotkey")
     IniWrite(ToggleDriverHotkeyWildcard ? "1" : "0", IniPath, "DriverAssistant", "ToggleHotkeyWildcard")
@@ -850,13 +879,14 @@ SaveDriverAssistantSettings() {
     IniWrite(DA_GearUp_Key, IniPath, "DriverAssistant", "DA_GearUp_Key")
     IniWrite(DA_GearDown_Key, IniPath, "DriverAssistant", "DA_GearDown_Key")
     IniWrite(DA_StratagemCallEnabled ? "1" : "0", IniPath, "DriverAssistant", "DA_StratagemCallEnabled")
+    IniWrite(DA_ForwardGearMode, IniPath, "DriverAssistant", "DA_ForwardGearMode")
 }
 
 ; Load settings from INI
 LoadDriverAssistantSettings() {
     global IniPath, ToggleDriverHotkey, ToggleDriverHotkeyWildcard
     global DA_W_Key, DA_S_Key, DA_E_Key, DA_C_Key, DA_GearUp_Key, DA_GearDown_Key
-    global DA_StratagemCallEnabled
+    global DA_StratagemCallEnabled, DA_ForwardGearMode
     
     try {
         ToggleDriverHotkey := IniRead(IniPath, "DriverAssistant", "ToggleHotkey", "")
@@ -868,6 +898,7 @@ LoadDriverAssistantSettings() {
         DA_GearUp_Key := IniRead(IniPath, "DriverAssistant", "DA_GearUp_Key", "Shift")
         DA_GearDown_Key := IniRead(IniPath, "DriverAssistant", "DA_GearDown_Key", "Ctrl")
         DA_StratagemCallEnabled := IniRead(IniPath, "DriverAssistant", "DA_StratagemCallEnabled", "0") = "1" ? true : false
+        DA_ForwardGearMode := Integer(IniRead(IniPath, "DriverAssistant", "DA_ForwardGearMode", "1"))
     } catch {
         ; Defaults are already set in global variables
     }
@@ -887,6 +918,7 @@ global IM_Button4Wildcard := false
 global IM_DropKey := "x"
 global IM_SleepDelay := 25
 global IM_SleepDelay2 := 75
+global IM_SensitivityMultiplier := 1.0
 
 global imStatusText := 0
 global imSettingsGui := 0
@@ -1029,8 +1061,9 @@ SendRelativeMouseMove(dx, dy) {
     DllCall("mouse_event", "UInt", 0x0001, "Int", dx, "Int", dy, "UInt", 0, "UInt", 0)
 }
 
-; Mouse movement helper with screen resolution scaling
+; Mouse movement helper with screen resolution scaling and sensitivity multiplier
 PerformIMMouseMove(raw_move_x, raw_move_y) {
+    global IM_SensitivityMultiplier
     local screen_width := A_ScreenWidth
     local screen_height := A_ScreenHeight
     local BASE_WIDTH := 1920
@@ -1039,8 +1072,8 @@ PerformIMMouseMove(raw_move_x, raw_move_y) {
     scale_x := screen_width / BASE_WIDTH
     scale_y := screen_height / BASE_HEIGHT
     
-    scaled_move_x := Round(raw_move_x * scale_x)
-    scaled_move_y := Round(raw_move_y * scale_y)
+    scaled_move_x := Round(raw_move_x * scale_x * IM_SensitivityMultiplier)
+    scaled_move_y := Round(raw_move_y * scale_y * IM_SensitivityMultiplier)
     
     ; Use relative mouse movement instead of absolute SetCursorPos
     ; This is required for raw input games (Helldivers 2) that ignore SetCursorPos
@@ -1096,6 +1129,11 @@ ShowInventoryManagerSettings(*) {
     imSettingsGui.Add("Text", "x" Scale(10) " y+" Scale(5) " w" Scale(70), "Hold Delay:")
     global imSleepDelay2Edit := imSettingsGui.Add("Edit", "x+" Scale(5) " yp-3 w" Scale(40) " Background2f2f2f Number", IM_SleepDelay2)
     
+    ; Sensitivity multiplier
+    imSettingsGui.Add("Text", "x" Scale(10) " y+" Scale(10) " w" Scale(200) " cGray", "Mouse Sensitivity:")
+    imSettingsGui.Add("Text", "x" Scale(10) " y+" Scale(5) " w" Scale(70), "Multiplier:")
+    global imSensitivityEdit := imSettingsGui.Add("Edit", "x+" Scale(5) " yp-3 w" Scale(40) " Background2f2f2f", IM_SensitivityMultiplier)
+    
     ; Save button
     btnIMSave := imSettingsGui.Add("Button", "x" Scale(10) " y+" Scale(25) " w" Scale(260) " h" Scale(30) " Default", "Save Settings")
     btnIMSave.OnEvent("Click", SaveInventoryManagerSettingsPopup)
@@ -1109,7 +1147,7 @@ SaveInventoryManagerSettingsPopup(*) {
     global imSettingsGui, IniPath
     global IM_Button1Hotkey, IM_Button2Hotkey, IM_Button3Hotkey, IM_Button4Hotkey
     global IM_Button1Wildcard, IM_Button2Wildcard, IM_Button3Wildcard, IM_Button4Wildcard
-    global IM_DropKey, IM_SleepDelay, IM_SleepDelay2
+    global IM_DropKey, IM_SleepDelay, IM_SleepDelay2, IM_SensitivityMultiplier
     
     ; Read values from GUI controls
     IM_Button1Hotkey := imInput1.GetValue()
@@ -1123,6 +1161,7 @@ SaveInventoryManagerSettingsPopup(*) {
     IM_DropKey := imDropKeyInput.GetValue() != "" ? imDropKeyInput.GetValue() : "x"
     IM_SleepDelay := Integer(imSleepDelayEdit.Value) > 0 ? Integer(imSleepDelayEdit.Value) : 25
     IM_SleepDelay2 := Integer(imSleepDelay2Edit.Value) > 0 ? Integer(imSleepDelay2Edit.Value) : 75
+    IM_SensitivityMultiplier := Float(imSensitivityEdit.Value) > 0 ? Float(imSensitivityEdit.Value) : 1.0
     
     ; Save all settings to INI
     SaveInventoryManagerSettings()
@@ -1138,7 +1177,7 @@ SaveInventoryManagerSettings() {
     global IniPath
     global IM_Button1Hotkey, IM_Button2Hotkey, IM_Button3Hotkey, IM_Button4Hotkey
     global IM_Button1Wildcard, IM_Button2Wildcard, IM_Button3Wildcard, IM_Button4Wildcard
-    global IM_DropKey, IM_SleepDelay, IM_SleepDelay2
+    global IM_DropKey, IM_SleepDelay, IM_SleepDelay2, IM_SensitivityMultiplier
     
     IniWrite(IM_Button1Hotkey, IniPath, "InventoryManager", "Button1Hotkey")
     IniWrite(IM_DropKey, IniPath, "InventoryManager", "DropKey")
@@ -1151,6 +1190,7 @@ SaveInventoryManagerSettings() {
     IniWrite(IM_Button4Wildcard ? "1" : "0", IniPath, "InventoryManager", "Button4Wildcard")
     IniWrite(IM_SleepDelay, IniPath, "InventoryManager", "SleepDelay")
     IniWrite(IM_SleepDelay2, IniPath, "InventoryManager", "SleepDelay2")
+    IniWrite(IM_SensitivityMultiplier, IniPath, "InventoryManager", "SensitivityMultiplier")
 }
 
 ; Load settings from INI
@@ -1159,11 +1199,16 @@ LoadInventoryManagerSettings() {
     global InventoryManagerActive
     global IM_Button1Hotkey, IM_Button2Hotkey, IM_Button3Hotkey, IM_Button4Hotkey
     global IM_Button1Wildcard, IM_Button2Wildcard, IM_Button3Wildcard, IM_Button4Wildcard
-    global IM_DropKey, IM_SleepDelay, IM_SleepDelay2
+    global IM_DropKey, IM_SleepDelay, IM_SleepDelay2, IM_SensitivityMultiplier
     
     try {
         InventoryManagerActive := IniRead(IniPath, "InventoryManager", "Active", "0") = "1" ? true : false
         IM_DropKey := IniRead(IniPath, "InventoryManager", "DropKey", "x")
+        IM_SensitivityMultiplier := Float(IniRead(IniPath, "InventoryManager", "SensitivityMultiplier", "1.0"))
+        if (IM_SensitivityMultiplier <= 0)
+            IM_SensitivityMultiplier := 1.0
+        if (IM_SensitivityMultiplier > 5.0)
+            IM_SensitivityMultiplier := 5.0
         ; Read each key with wildcard parsing
         temp := IniRead(IniPath, "InventoryManager", "Button1Hotkey", "")
         if (SubStr(temp, 1, 1) = "*") {
