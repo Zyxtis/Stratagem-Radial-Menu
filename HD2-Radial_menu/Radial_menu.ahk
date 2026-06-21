@@ -44,10 +44,15 @@ global EnglishLayouts := Map(
     "00001409", "English (New Zealand)",
     "00004009", "English (India)",
     "00010407", "German (IBM)",
-    "0000040c", "French (AZERTY)"
+    "0000040c", "French (AZERTY)",
+    "00000410", "Italian (Italy)",
+    "0000040a", "Spanish (Spain)",
+    "0000041d", "Swedish (Sweden)",
+    "00000413", "Dutch (Netherlands)",
+    "00000813", "Dutch (Belgium)"
 )
-global EnglishLayoutCodes := ["00000409", "00000809", "00001009", "00001809", "00001409", "00004009", "00010407", "0000040c"]
-global EnglishLayoutNames := ["English (US)", "English (UK)", "English (Canada)", "English (Ireland)", "English (New Zealand)", "English (India)", "German (IBM)", "French (AZERTY)"]
+global EnglishLayoutCodes := ["00000409", "00000809", "00001009", "00001809", "00001409", "00004009", "00010407", "0000040c", "00000410", "0000040a", "0000041d", "00000413", "00000813"]
+global EnglishLayoutNames := ["English (US)", "English (UK)", "English (Canada)", "English (Ireland)", "English (New Zealand)", "English (India)", "German (IBM)", "French (AZERTY)", "Italian (Italy)", "Spanish (Spain)", "Swedish (Sweden)", "Dutch (Netherlands)", "Dutch (Belgium)"]
 
 ; Camera Bypass
 global BlockCameraBypass := false, OpenMapKey := "Tab", MapInputType := 1, CameraBypassActive := false
@@ -1678,6 +1683,7 @@ UpdateInputLayout(*) {
 ShowCustomKeysPopup() {
     global CustomUpKey, CustomDownKey, CustomLeftKey, CustomRightKey
     
+    SwitchToEnglishLayout()
     customKeysGui := Gui("+Owner" . settingsGui.Hwnd, "Custom Keys")
     customKeysGui.SetFont("s10", "Segoe UI")
     
@@ -1726,6 +1732,7 @@ UpdateRealKeyDelay(*) {
 
 UpdateSuspendHotkey(*) {
     global SuspendHotkey
+    SwitchToEnglishLayout()
     SuspendHotkey := suspendHotkeyInput.Value
     SetSuspendHotkey()
     SaveSettings()
@@ -1733,6 +1740,7 @@ UpdateSuspendHotkey(*) {
 
 UpdateExitHotkey(*) {
     global ExitHotkey
+    SwitchToEnglishLayout()
     ExitHotkey := exitHotkeyInput.Value
     SetExitHotkey()
     SaveSettings()
@@ -1740,6 +1748,7 @@ UpdateExitHotkey(*) {
 
 UpdateDisplayToggleHotkey(*) {
     global DisplayToggleHotkey
+    SwitchToEnglishLayout()
     DisplayToggleHotkey := displayToggleHotkeyInput.Value
     SetDisplayToggleHotkey()
     SaveSettings()
