@@ -79,11 +79,11 @@ If you experience detection issues, enable Debug Mode. This will display the arr
 
 Detection methods:
 
-1) color-based method is sensitive to color variations and may not work correctly in extremely bright areas of the map.
+1) The color-based method is sensitive to color variations and may not work correctly in extremely bright areas of the map.
 
 If you use ReShade or other color-grading tools, OCR detection may fail completely because the arrow colors have been altered. In this case, enable Debug Mode and use the OCR scan (**F3 during a mission**) to extract the modified HEX color code of your stratagem arrows. Then update the **ArrowColor** field in the **OCR Settings** with the new HEX color code.
 
-2) shape-based method uses the FindText library to detect stratagem arrows by matching their visual shape against predefined patterns stored in the pattern database.
+2) The shape-based method uses the FindText library to detect stratagem arrows by matching their visual shape against predefined patterns stored in the pattern database.
 Currently, the pattern database is limited to 1080p, 1440p, and 2160p resolutions and contains a relatively small number of arrow patterns. Because of this limitation, the shape-based method may not provide better detection accuracy than the color-based OCR method in most cases.
 
 
@@ -133,8 +133,6 @@ The detection process uses several tolerance settings:
   - **2** — checks a 5×5 pixel area.
   - **3** — checks a 7×7 pixel area.
 
-Increasing the **CenterStability** value improves detection reliability but may slightly increase processing time.
-
 ### Detection Process
 
 The detection process works in two stages:
@@ -174,5 +172,17 @@ Currently, the pattern database is quite limited, but it should be sufficient to
   
   `5% → 10% → 15%`
 
-  This approach allows the script to detect easier matches first and search for more difficult matches during later passes.
+  This approach improves detection accuracy by prioritizing lower tolerance matches first. At high FaultTolerance values, searching directly with the maximum tolerance can cause false detections because multiple arrow directions may match the same pattern. A correct match found at a lower tolerance is accepted before less accurate matches at higher tolerance levels are considered.
+
+  ### Resolution Scaling Note
+
+All pixel-based values depend on the screen resolution. The default visible values are calibrated for **1440p (2560×1440)** resolution.
+
+If a different resolution is detected, all pixel-based values are automatically scaled to match the current screen resolution:
+
+- **1080p (1920×1080)** → values are scaled by **0.75×**
+- **1440p (2560×1440)** → values are used at **1.00×** (default)
+- **2160p (3840×2160)** → values are scaled by **1.50×**
+
+This scaling applies to all parameters that use pixel values, ensuring consistent detection behavior across different screen resolutions.
 ---
