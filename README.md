@@ -101,9 +101,7 @@ There are four available modes: Purifier/Arc Thrower, Railgun, Epoch, and Power 
 How it works:
 The script performs a predefined action cycle by automatically triggering a left-click based on the selected mode. Once launched, the script remains inactive until toggled via its assigned hotkey.
 
-Safety Catch:
-
-The Safety Catch deactivates the fire button until a designated safety key is held, preventing accidental firing. To enable this feature, tick the checkbox and enter your desired key.
+Safety Catch: The Safety Catch deactivates the fire button until a designated safety key is held, preventing accidental firing. To enable this feature, tick the checkbox and enter your desired key.
 For example, if your fire key is LMB and the safety key is RMB, the macro will only execute while RMB is held. By using the tilde (~) operator, you allow the safety keypress to "pass through" to the game; this ensures the safety mechanism activates while still triggering the key's native in-game action (such as aiming).
 
 It's not recommended to activate the Weapon Assistant while the AutoHotkey GUI window is active. Clicking inside the window might cause a "stuck click" which can be resolved by pressing Esc or opening Task Manager. 
@@ -157,7 +155,7 @@ The extracted color is then used to analyze the arrow edges and determine its di
 
 The final direction is determined by comparing the number of matching pixels within the edge strips. The side with the higher number of matching pixels represents the direction opposite to the arrow tip, allowing the script to accurately determine the arrow orientation.
 
----
+
 
 ## 2. Shape-Based OCR Method
 
@@ -177,3 +175,4 @@ Currently, the pattern database is quite limited, but it should be sufficient to
   `5% → 10% → 15%`
 
   This approach allows the script to detect easier matches first and search for more difficult matches during later passes.
+---
