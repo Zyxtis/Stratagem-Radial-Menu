@@ -5,7 +5,7 @@ This AutoHotkey script is built for Helldivers 2, designed to streamline key com
 
 Credits:
 
-    **Original Idea**: RuggedTheDragon [(Reddit link)](https://www.reddit.com/r/Helldivers/comments/1n1t6jk/ok_hear_me_outa_radial_menu_for_stratagems/)
+    Original Idea: RuggedTheDragon [(Reddit link)](https://www.reddit.com/r/Helldivers/comments/1n1t6jk/ok_hear_me_outa_radial_menu_for_stratagems/)
     Implementation Suggestion: piedras8negras [(Nexus Mods link)](https://www.nexusmods.com/helldivers2/mods/6584?tab=posts)
     Updated GDI+ Library: buliasz [(GitHub link)](https://github.com/buliasz/AHKv2-Gdip) [Required for the radial menu functionality and the Color-Based OCR method]
     Updated FindText Library: FeiYue [(AHK forum link)](https://www.autohotkey.com/boards/viewtopic.php?f=83&t=116471) [Required for the Shape-Based OCR method]
