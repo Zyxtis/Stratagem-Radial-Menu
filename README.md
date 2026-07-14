@@ -174,7 +174,7 @@ Currently, the pattern database is quite limited, but it should be sufficient to
 
   This approach improves detection accuracy by prioritizing lower tolerance matches first. At high FaultTolerance values, searching directly with the maximum tolerance can cause false detections because multiple arrow directions may match the same pattern. A correct match found at a lower tolerance is accepted before less accurate matches at higher tolerance levels are considered.
 
-  ### Resolution Scaling Note
+## Resolution Scaling Note
 
 All pixel-based values depend on the screen resolution. The default visible values are calibrated for **1440p (2560×1440)** resolution.
 
@@ -185,4 +185,5 @@ If a different resolution is detected, all pixel-based values are automatically 
 - **2160p (3840×2160)** → values are scaled by **1.50×**
 
 This scaling applies to all parameters that use pixel values, ensuring consistent detection behavior across different screen resolutions.
+
 ---
