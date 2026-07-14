@@ -72,7 +72,19 @@ Allows the script to detect your current Stratagems during a mission and use the
     Scrambler Bypass (Default: F4) : When enabled, the script identifies available Stratagems every time the radial menu is opened and displays them. Once a Stratagem is selected, the OCR reads the current arrow sequence on the screen and executes it automatically.
     OCR Objective: This feature reads and executes Stratagems that are visible on the screen without needing to open the Stratagem menu. These are typically mission-specific Stratagems that appear in certain locations, such as Raising the Flag, Hellbombs, Uploading Data, etc.
 
-Note on Performance: The OCR is sensitive to color palettes and may function incorrectly in extremely bright areas of the map. If you use ReShade or other color-grading tools, the OCR may stop working entirely. In this case, you must manually extract the modified HEX color code of your Stratagem arrows and update the ArrowColor field in OCR Settings.
+Note on Performance: The OCR system is highly sensitive to the position and appearance of the stratagem menu. Any changes from the game's default settings may reduce detection accuracy or cause OCR to fail.
+Examples include: Enabling visual effects such as Curved. Changing the stratagem menu HUD scale in the game settings(HUD scaling differences can be compensated for by adjusting the In-Game HUD Scale option in the OCR settings).
+
+If you experience detection issues, enable Debug Mode. This will display the arrow detection grid so you can verify that it aligns correctly with the stratagem arrows on your system. If the grid does not match the arrows, you can manually adjust it until the alignment is correct.
+
+Detection methods:
+
+1) color-based method is sensitive to color variations and may not work correctly in extremely bright areas of the map.
+
+If you use ReShade or other color-grading tools, OCR detection may fail completely because the arrow colors have been altered. In this case, enable Debug Mode and use the OCR scan (**F3 during a mission**) to extract the modified HEX color code of your stratagem arrows. Then update the **ArrowColor** field in the **OCR Settings** with the new HEX color code.
+
+2) shape-based method uses the FindText library to detect stratagem arrows by matching their visual shape against predefined patterns stored in the pattern database.
+Currently, the pattern database is limited to 1080p, 1440p, and 2160p resolutions and contains a relatively small number of arrow patterns. Because of this limitation, the shape-based method may not provide better detection accuracy than the color-based OCR method in most cases.
 
 
 Weapon Assistant: 
@@ -102,3 +114,66 @@ Driver Assistant: This feature introduces automatic gear shifting to enhance veh
 Inventory Manager: Drop an item from your inventory with a single key press.
 
 Quick Weapon Switch: When enabled, the script tracks the 1, 2, 3, and 4 keys. Pressing the designated hotkey will switch between the two most recently used slots. For your convenience, you can disable tracking for specific slots(keys).
+
+
+---
+# Detailed Description of OCR Detection Methods
+
+## 1. Color-Based OCR Method
+
+The color-based OCR method detects stratagem arrows by analyzing their color information. The target arrow color is defined in the **ArrowColor** field using the **HEX (RGB)** format.
+
+### Detection Parameters
+
+The detection process uses several tolerance settings:
+
+- **ColorTolerance** — defines the allowed color variation when searching for the initial arrow color.
+- **ExtractColorTol** — defines the tolerance used for the extracted arrow color after a more precise color sample is obtained.
+- **CenterStability** — controls the accuracy of the initial center-point color check:
+  - **0** — checks only one pixel at the exact center of the arrow.
+  - **1** — checks a 3×3 pixel area (center pixel plus surrounding pixels).
+  - **2** — checks a 5×5 pixel area.
+  - **3** — checks a 7×7 pixel area.
+
+Increasing the **CenterStability** value improves detection reliability but may slightly increase processing time.
+
+### Detection Process
+
+The detection process works in two stages:
+
+#### 1. Arrow Presence Detection
+
+The script first checks whether an arrow exists by analyzing the color stability around its center point.
+
+If the detected color matches the expected arrow color within the defined tolerance, the script extracts a more accurate color sample from the center of the arrow.
+
+#### 2. Arrow Direction Detection
+
+The extracted color is then used to analyze the arrow edges and determine its direction.
+
+- **ArrowCheckDistance** — defines the distance from the center point to the arrow edge where the edge check is performed.
+- **ArrowEdgeStripSize** — defines the size of the perpendicular pixel strip used to compare colors along the arrow edge.
+- **MinEdgeMatches** — filters out weak edge detections by ignoring edges with fewer matching pixels than the required minimum.
+
+The final direction is determined by comparing the number of matching pixels within the edge strips. The side with the higher number of matching pixels represents the direction opposite to the arrow tip, allowing the script to accurately determine the arrow orientation.
+
+---
+
+## 2. Shape-Based OCR Method
+
+The shape-based OCR method relies heavily on the **FindText** library and its pattern database.
+
+Currently, the pattern database is quite limited, but it should be sufficient to provide basic functionality. Expanding the database with additional resolutions and arrow variations may improve detection accuracy in the future.
+
+### Detection Parameters
+
+- **FaultTolerance** — defines the allowed error variation when searching for an arrow using the available patterns.
+
+- **ScanSteps** — divides the maximum tolerance into equal steps for progressive scanning. Instead of searching only once at the maximum tolerance, the scan is performed in multiple passes with gradually increasing tolerance.
+
+  Example:  
+  A **15% tolerance** with **3 scan steps** will perform searches at:
+  
+  `5% → 10% → 15%`
+
+  This approach allows the script to detect easier matches first and search for more difficult matches during later passes.
