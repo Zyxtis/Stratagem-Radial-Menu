@@ -87,12 +87,10 @@ If you use ReShade or other color-grading tools, OCR detection may fail complete
 2) The shape-based method uses the FindText library to detect stratagem arrows by matching their visual shape against predefined patterns stored in the pattern database.
 Currently, the pattern database is limited to 1080p, 1440p, and 2160p resolutions and contains a relatively small number of arrow patterns. Because of this limitation, the shape-based method may not provide better detection accuracy than the color-based OCR method in most cases.
 
-### Assistant Modules
+### Assistant Modules:
 A collection of helper modules designed to make gameplay more convenient and efficient. These assistants improve interaction with different game features, provide better control over various systems, and create a smoother and more comfortable gaming experience.
 
-**Weapon Assistant:**
-
-Designed for use with weapons such as the Epoch, RS-422 "Railgun", ARC-3 "Arc Thrower", PLAS-101 "Purifier", and PLAS-15 "Scythe".
+**Weapon Assistant:** Designed for use with weapons such as the Epoch, RS-422 "Railgun", ARC-3 "Arc Thrower", PLAS-101 "Purifier", and PLAS-15 "Scythe".
 
 There are four available modes: Purifier/Arc Thrower, Railgun, Epoch, and Power Throw:
 
