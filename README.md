@@ -168,12 +168,16 @@ Currently, the pattern database is quite limited, but it should be sufficient to
 
 - **ScanSteps** — divides the maximum tolerance into equal steps for progressive scanning. Instead of searching only once at the maximum tolerance, the scan is performed in multiple passes with gradually increasing tolerance.
 
-  Example:  
-  A **15% tolerance** with **3 scan steps** will perform searches at:
+Example:  
+A **15% tolerance** with **3 scan steps** will perform searches at:
   
-  `5% → 10% → 15%`
+`5% → 10% → 15%`
 
-  This approach improves detection accuracy by prioritizing lower tolerance matches first. At high FaultTolerance values, searching directly with the maximum tolerance can cause false detections because multiple arrow directions may match the same pattern. A correct match found at a lower tolerance is accepted before less accurate matches at higher tolerance levels are considered.
+This approach improves detection accuracy by prioritizing lower tolerance matches first. At high FaultTolerance values, searching directly with the maximum tolerance can cause false detections because multiple arrow directions may match the same pattern. A correct match found at a lower tolerance is accepted before less accurate matches at higher tolerance levels are considered.
+
+## Detection Patterns
+Gray2Two — Fast and efficient for high-contrast images with consistent lighting. It produces stable results when objects are clearly separated from the background and requires minimal parameter tuning.
+GrayDiff2Two — Better suited for images with uneven lighting, gradients, shadows, or anti-aliased edges. By relying on local contrast instead of absolute brightness, it offers more robust detection in challenging visual conditions.
 
 ## Resolution Scaling Note
 
