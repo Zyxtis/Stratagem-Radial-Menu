@@ -3,7 +3,7 @@ AutoHotkey script for Helldivers 2, designed to transform the player's playstyle
 
 This AutoHotkey script is built for Helldivers 2, designed to streamline key combinations through advanced automation and a customizable Radial Menu. Instead of memorizing complex key combinations or cluttering your keyboard with dozens of binds, you can now call any Stratagem using an intuitive visual interface.
 
-Credits:
+### Credits:
 
     Original Idea: RuggedTheDragon [(Reddit link)](https://www.reddit.com/r/Helldivers/comments/1n1t6jk/ok_hear_me_outa_radial_menu_for_stratagems/)
     Implementation Suggestion: piedras8negras [(Nexus Mods link)](https://www.nexusmods.com/helldivers2/mods/6584?tab=posts)
@@ -12,7 +12,7 @@ Credits:
     Stratagem Icons(1.0-1.1): nvigneux [(GitHub link)](https://github.com/nvigneux/Helldivers-2-Stratagems-icons-svg)
     Improved Stratagem Icons(1.2+): Kungull [(GitHub link)](https://github.com/Kungull)
 
-Key Features:
+### Key Features:
 
     Radial Stratagem Menu: A sleek, on-screen circular menu that allows you to select and activate stratagems quickly with your mouse.
     One-Key Activation: Assign the Radial Menu to a single hotkey (keyboard or mouse) for instant access.
@@ -22,19 +22,19 @@ Key Features:
     Stratagem Customization: add new or edit existed stratagem as game evolve.
 
 
-Usage Instructions:
+### Usage Instructions:
 1. Installation: Ensure you have AutoHotkey v2 installed. Unzip the archive and run Radial_menu.ahk.
 2. Initial Setup: Open the Settings tab. Set your desired Radial Menu Key (Default: Middle Mouse Button). Match the Stratagem Menu Key in the script to your in-game key (Default: Left Ctrl). Set your Stratagem Input Layout (Arrows are highly recommended, as the game uses WASD by default).
 3. Managing Binds: Use the GUI to add (+) or remove (-) Stratagems for your active profile. Double-click (LMB) a Stratagem in the list popup to mark it as a favorite. This allows you to highlight essential Stratagems (like Reinforce or Resupply) and sort them with a single click.
 4. Using the Radial Menu: Press the Radial Menu Key to trigger the menu. While holding the key, move your mouse toward the desired Stratagem and release it to execute the macro.
 
-Important Notes:
+### Important Notes:
 
     Window Mode: The game must be set to Windowed or Borderless Windowed mode for the Radial Menu GUI to overlay correctly.
     Administrator Rights: If Steam or Helldivers 2 is running as Administrator, you must run the script as Administrator as well.
     Layout Sensitivity: The script works best with the English keyboard layout. If you encounter any issues, manually edit the Settings.ini file or simply delete it (this will reset all saved settings and binds), then restart the script.
 
-Default Hotkeys:
+### Default Hotkeys:
 
     Middle Mouse Button — Radial Menu 
     F1 - Show/Hide main GUI
@@ -45,11 +45,11 @@ Default Hotkeys:
     End — Close the script
     Page Up / Page Down — Switches profiles forward / backward (active only while holding the Radial Menu or Floating List key) 
 
-(*)Checkbox Function Description:
+### (*)Checkbox Function Description:
 
 This adds the * operator to your hotkey. This means it will trigger regardless of whether other modifier keys (like Ctrl, Alt, Shift, or Win) are held down at the same time.
 
-AHK Designations:
+### AHK Designations:
 
     LButton - Left mouse button click
     RButton - Right mouse button click
@@ -65,7 +65,7 @@ AHK Designations:
     ~ - "Pass-through" operator. Causes the hotkey to execute its action without blocking the original keypress from reaching the application. 
 
 
-OCR Function Description:
+### OCR Function Description:
 
 Allows the script to detect your current Stratagems during a mission and use them within the radial menu. Its functionality is based on reading the specific arrow sequences of each Stratagem.
 
@@ -87,8 +87,10 @@ If you use ReShade or other color-grading tools, OCR detection may fail complete
 2) The shape-based method uses the FindText library to detect stratagem arrows by matching their visual shape against predefined patterns stored in the pattern database.
 Currently, the pattern database is limited to 1080p, 1440p, and 2160p resolutions and contains a relatively small number of arrow patterns. Because of this limitation, the shape-based method may not provide better detection accuracy than the color-based OCR method in most cases.
 
+### Assistant Modules
+A collection of helper modules designed to make gameplay more convenient and efficient. These assistants improve interaction with different game features, provide better control over various systems, and create a smoother and more comfortable gaming experience.
 
-Weapon Assistant: 
+**Weapon Assistant:**
 
 Designed for use with weapons such as the Epoch, RS-422 "Railgun", ARC-3 "Arc Thrower", PLAS-101 "Purifier", and PLAS-15 "Scythe".
 
@@ -108,11 +110,11 @@ For example, if your fire key is LMB and the safety key is RMB, the macro will o
 It's not recommended to activate the Weapon Assistant while the AutoHotkey GUI window is active. Clicking inside the window might cause a "stuck click" which can be resolved by pressing Esc or opening Task Manager. 
 
 
-Driver Assistant: This feature introduces automatic gear shifting to enhance vehicle responsiveness and handling. Press W to shift to first gear and S to shift to reverse. Additionally, the script automatically deactivates this functionality when you press E (the vehicle exit key).
+**Driver Assistant:** This feature introduces automatic gear shifting to enhance vehicle responsiveness and handling. Press W to shift to first gear and S to shift to reverse. Additionally, the script automatically deactivates this functionality when you press E (the vehicle exit key).
 
-Inventory Manager: Drop an item from your inventory with a single key press.
+**Inventory Manager:** Drop an item from your inventory with a single key press.
 
-Quick Weapon Switch: When enabled, the script tracks the 1, 2, 3, and 4 keys. Pressing the designated hotkey will switch between the two most recently used slots. For your convenience, you can disable tracking for specific slots(keys).
+**Quick Weapon Switch:** When enabled, the script tracks the 1, 2, 3, and 4 keys. Pressing the designated hotkey will switch between the two most recently used slots. For your convenience, you can disable tracking for specific slots(keys).
 
 
 ---
@@ -138,13 +140,13 @@ The detection process uses several tolerance settings:
 
 The detection process works in two stages:
 
-#### 1. Arrow Presence Detection
+#### First Stage: Arrow Presence Detection
 
 The script first checks whether an arrow exists by analyzing the color stability around its center point.
 
 If the detected color matches the expected arrow color within the defined tolerance, the script extracts a more accurate color sample from the center of the arrow.
 
-#### 2. Arrow Direction Detection
+#### Second Stage: Arrow Direction Detection
 
 The extracted color is then used to analyze the arrow edges and determine its direction.
 
@@ -177,6 +179,7 @@ This approach improves detection accuracy by prioritizing lower tolerance matche
 
 ## Detection Patterns
 Gray2Two — Fast and efficient for high-contrast images with consistent lighting. It produces stable results when objects are clearly separated from the background and requires minimal parameter tuning.
+
 GrayDiff2Two — Better suited for images with uneven lighting, gradients, shadows, or anti-aliased edges. By relying on local contrast instead of absolute brightness, it offers more robust detection in challenging visual conditions.
 
 ## Resolution Scaling Note
