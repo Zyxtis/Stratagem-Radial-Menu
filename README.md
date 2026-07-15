@@ -24,9 +24,9 @@ This AutoHotkey script is built for Helldivers 2, designed to streamline key com
 
 ### Usage Instructions:
 1. Installation: Ensure you have AutoHotkey v2 installed. Unzip the archive and run Radial_menu.ahk.
-2. Initial Setup: Open the Settings tab. Set your desired Radial Menu Key (Default: Middle Mouse Button). Match the Stratagem Menu Key in the script to your in-game key (Default: Left Ctrl). Set your Stratagem Input Layout (Arrows are highly recommended, as the game uses WASD by default).
+2. Initial Setup: Open the Settings tab. Set your desired Radial Menu Key (Default: Middle Mouse Button). Match the Stratagem Menu Key in the script to your in-game key (Default: Left Ctrl). Set the Stratagem Input Layout to match between the script and the game (Default: Arrows in the script, WASD in-game).
 3. Managing Binds: Use the GUI to add (+) or remove (-) Stratagems for your active profile. Double-click (LMB) a Stratagem in the list popup to mark it as a favorite. This allows you to highlight essential Stratagems (like Reinforce or Resupply) and sort them with a single click.
-4. Using the Radial Menu: Press the Radial Menu Key to trigger the menu. While holding the key, move your mouse toward the desired Stratagem and release it to execute the macro.
+4. Using the Radial Menu: Hold the Radial Menu Key to open the menu. While holding the key, move your mouse to the desired Stratagem, then release the key to execute the macro.
 
 ### Important Notes:
 
