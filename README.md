@@ -1,4 +1,5 @@
-# Stratagem-Radial-Menu
+🌐 **Language:** **English** | [Русский](localization/ru/Readme(ru).md)
+# Stratagem Radial Menu
 AutoHotkey script for Helldivers 2, designed to transform the player's playstyle by offering automation of stratagem input with extensive customization and a wide range of functions.
 
 This AutoHotkey script is built for Helldivers 2, designed to streamline key combinations through advanced automation and a customizable Radial Menu. Instead of memorizing complex key combinations or cluttering your keyboard with dozens of binds, you can now call any Stratagem using an intuitive visual interface.
@@ -38,7 +39,7 @@ This AutoHotkey script is built for Helldivers 2, designed to streamline key com
 
     Middle Mouse Button — Radial Menu 
     F1 - Show/Hide main GUI
-    F2 - Show/Hide floating list for keybinding profiles
+    F2 - Show/Hide floating list for keybinding profiles. Hold the key to move the list position.
     F3 - OCR Stratagem Scan
     F4 -  Scrambler Bypass toggle
     Insert — Suspend/Resume the script
@@ -66,7 +67,9 @@ This adds the * operator to your hotkey. This means it will trigger regardless o
 
 
 ### OCR Function Description:
-
+<details>
+<summary> **Expand** </summary>
+    
 Allows the script to detect your current Stratagems during a mission and use them within the radial menu. Its functionality is based on reading the specific arrow sequences of each Stratagem.
 
     Stratagem Scan (Default: F3): By pressing the hotkey, the OCR reads your current Stratagem arrows, automatically creates and switches to an OCR profile, and populates it with the detected Stratagems for immediate use.
@@ -78,45 +81,55 @@ Examples include: Enabling visual effects such as Curved. Changing the stratagem
 
 If you experience detection issues, enable Debug Mode. This will display the arrow detection grid so you can verify that it aligns correctly with the stratagem arrows on your system. If the grid does not match the arrows, you can manually adjust it until the alignment is correct.
 
-Detection methods:
+**Detection Methods:**
 
-1) The color-based method is sensitive to color variations and may not work correctly in extremely bright areas of the map.
+1. Color-Based OCR
 
-If you use ReShade or other color-grading tools, OCR detection may fail completely because the arrow colors have been altered. In this case, enable Debug Mode and use the OCR scan (**F3 during a mission**) to extract the modified HEX color code of your stratagem arrows. Then update the **ArrowColor** field in the **OCR Settings** with the new HEX color code.
+This method detects stratagem arrows based on their color. Keep in mind that it is sensitive to changes in image colors. Detection accuracy may decrease in very bright areas of the map. If you use HDR, ReShade, or any other software that modifies the game's color grading, OCR may fail to detect arrows entirely. In this case, enable **Debug Mode** and perform an **OCR Scan** (**F3**) during a mission to obtain the updated HEX color value of the arrows. Then replace the **Arrow Color** value in the OCR settings with the newly detected HEX code.
 
-2) The shape-based method uses the FindText library to detect stratagem arrows by matching their visual shape against predefined patterns stored in the pattern database.
-Currently, the pattern database is limited to 1080p, 1440p, and 2160p resolutions and contains a relatively small number of arrow patterns. Because of this limitation, the shape-based method may not provide better detection accuracy than the color-based OCR method in most cases.
+2. Shape-Based OCR
+
+This method uses the **FindText** library to detect stratagem arrows based on their shape. At present, the pattern database supports only **1920×1080 (1080p)**, **2560×1440 (1440p)**, and **3840×2160 (2160p)** resolutions. The number of available patterns is still relatively small, so in most cases this method does not provide higher detection accuracy than the **Color-Based OCR** method.
+</details>
 
 ### Assistant Modules:
+<details>
+<summary> **Expand** </summary>
+    
 A collection of helper modules designed to make gameplay more convenient and efficient. These assistants improve interaction with different game features, provide better control over various systems, and create a smoother and more comfortable gaming experience.
 
-**Weapon Assistant:** Designed for use with weapons such as the Epoch, RS-422 "Railgun", ARC-3 "Arc Thrower", PLAS-101 "Purifier", and PLAS-15 "Scythe".
+**Weapon Assistant:** Designed for use with weapons such as the Epoch, RS-422 "Railgun", ARC-3 "Arc Thrower", PLAS-101 "Purifier", and PLAS-15 "Loyalist".
 
 There are four available modes: Purifier/Arc Thrower, Railgun, Epoch, and Power Throw:
 
     Purifier/Arc Thrower: Charges for ~1 second, then releases. Hold the left mouse button for continuous fire.
-    Railgun (Unsafe): Press and hold to charge for ~3 seconds; the weapon then fires and reloads automatically. If the hotkey is released early, it will fire and reload upon release. Use this mode for the Railgun’s "Unsafe" setting.
-    Epoch: Charges for ~2.5 seconds, then releases.
+    Railgun (Unsafe): Automatically cuts off the charge at around 3 seconds, preventing overheating and weapon explosion. After reaching the cutoff point, the script automatically fires and reloads the weapon. If the hotkey is released earlier, the weapon fires immediately at the current charge level and reloads. Designed for use with the Railgun's "Unsafe" setting.
+    Epoch: Automatically cuts off the charge at around 2.5 seconds, preventing overheating and weapon detonation. If the hotkey is released earlier, the weapon fires immediately with a lower charge. Reaching the cutoff point provides a wider damage area.
     Power Throw: Automates a timed sequence using the left mouse button and the interaction key to throw items—such as barrels and platinum bars—further than a standard throw.
 
 How it works:
 The script performs a predefined action cycle by automatically triggering a left-click based on the selected mode. Once launched, the script remains inactive until toggled via its assigned hotkey.
 
-Safety Catch: The Safety Catch deactivates the fire button until a designated safety key is held, preventing accidental firing. To enable this feature, tick the checkbox and enter your desired key.
-For example, if your fire key is LMB and the safety key is RMB, the macro will only execute while RMB is held. By using the tilde (~) operator, you allow the safety keypress to "pass through" to the game; this ensures the safety mechanism activates while still triggering the key's native in-game action (such as aiming).
+Safety Catch: The Safety Catch deactivates the macro fire button until a designated safety key is held, preventing accidental firing. To enable this feature, tick the checkbox and enter your desired key.
+For example, if your macro fire key is LMB and the safety key is RMB, the macro will only execute while RMB is held. By using the tilde (~) operator, you allow the safety keypress to "pass through" to the game; this ensures the safety mechanism activates while still triggering the key's native in-game action (such as aiming).
 
 It's not recommended to activate the Weapon Assistant while the AutoHotkey GUI window is active. Clicking inside the window might cause a "stuck click" which can be resolved by pressing Esc or opening Task Manager. 
 
 
-**Driver Assistant:** This feature introduces automatic gear shifting to enhance vehicle responsiveness and handling. Press W to shift to first gear and S to shift to reverse. Additionally, the script automatically deactivates this functionality when you press E (the vehicle exit key).
+**Driver Assistant:** This feature introduces automatic gear shifting to enhance vehicle responsiveness and handling. Press W to shift to forward gear and S to shift to reverse. Additionally, the script automatically deactivates this functionality when you press E (the vehicle exit key).
+
+- Enhanced Gear Switch: Changes the gear switching algorithm, allowing direct switching to the selected gear instead of using the standard sequential switching process. This speeds up gear changes, but due to the game's built-in automatic gear shifting system, in some situations it may interfere and select a gear higher than expected. For proper operation, it is recommended to disable automatic gear shifting in the game settings.
+- Driver Stratagem Call: Automates the process of changing seats when calling stratagems from a vehicle. When activating a stratagem through the radial menu or an assigned hotkey, the character automatically switches to the passenger seat, leans out of the window, and inputs the stratagem code. After that, you have **5 seconds** to throw the stratagem (**LMB**). If the throw is not performed within this time, the call is automatically canceled. After successfully throwing the stratagem, the character automatically returns to the driver's seat.
 
 **Inventory Manager:** Drop an item from your inventory with a single key press.
 
 **Quick Weapon Switch:** When enabled, the script tracks the 1, 2, 3, and 4 keys. Pressing the designated hotkey will switch between the two most recently used slots. For your convenience, you can disable tracking for specific slots(keys).
+</details>
 
 
----
-# Detailed Description of OCR Detection Methods
+### Detailed Description of OCR Detection Methods
+<details>
+<summary> **Expand** </summary>
 
 ## 1. Color-Based OCR Method
 
@@ -154,8 +167,6 @@ The extracted color is then used to analyze the arrow edges and determine its di
 
 The final direction is determined by comparing the number of matching pixels within the edge strips. The side with the higher number of matching pixels represents the direction opposite to the arrow tip, allowing the script to accurately determine the arrow orientation.
 
-
-
 ## 2. Shape-Based OCR Method
 
 The shape-based OCR method relies heavily on the **FindText** library and its pattern database.
@@ -179,8 +190,9 @@ This approach improves detection accuracy by prioritizing lower tolerance matche
 Gray2Two — Fast and efficient for high-contrast images with consistent lighting. It produces stable results when objects are clearly separated from the background and requires minimal parameter tuning.
 
 GrayDiff2Two — Better suited for images with uneven lighting, gradients, shadows, or anti-aliased edges. By relying on local contrast instead of absolute brightness, it offers more robust detection in challenging visual conditions.
+</details>
 
-## Resolution Scaling Note
+### Resolution Scaling Note
 
 All pixel-based values depend on the screen resolution. The default visible values are calibrated for **1440p (2560×1440)** resolution.
 
