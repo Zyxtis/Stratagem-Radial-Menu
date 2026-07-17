@@ -33,7 +33,7 @@ This AutoHotkey script is built for Helldivers 2, designed to streamline key com
 
     Window Mode: The game must be set to Windowed or Borderless Windowed mode for the Radial Menu GUI to overlay correctly.
     Administrator Rights: If Steam or Helldivers 2 is running as Administrator, you must run the script as Administrator as well.
-    Layout Sensitivity: The script works best with the English keyboard layout. If you encounter any issues, manually edit the Settings.ini file or simply delete it (this will reset all saved settings and binds), then restart the script.
+    Layout Sensitivity: The script works best with the English keyboard layout. The settings include an Auto-Lang feature that automatically switches the keyboard layout when entering keys for creating bindings. If you encounter any issues, manually edit the Settings.ini or Profiles.ini files, or simply delete them (this will reset all saved settings, profiles, and bindings), then restart the script.
 
 ### Default Hotkeys:
 
