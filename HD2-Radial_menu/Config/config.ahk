@@ -36,7 +36,9 @@ global ThemeTitleTextColor := "FFFFFF"
 global ThemeListColor      := "000000"
 
 ; ---PATHS---
-global StratagemsIniPath := A_ScriptDir "\Config\stratagems.ini"
+
+; ---LANGUAGE SYSTEM---
+#Include language.ahk
 
 ; ---DATA STORAGE---
 global Stratagems        := Map()
@@ -184,13 +186,15 @@ LoadPngAsHBitmap(pngPath, targetSize) {
 
 ; ---DATA LOADING---
 LoadStratagemsData() {
-    global Stratagems, StratagemNames, OrderedIDs, StratagemSections
+    global Stratagems, StratagemNames, OrderedIDs, StratagemSections, StratagemsIniPath
     
     Stratagems := Map()
     StratagemNames := Map()
     OrderedIDs := []
     StratagemSections := Map()
     
+    ; Use language-specific stratagems file
+    StratagemsIniPath := GetStratagemsPath()
     if !FileExist(StratagemsIniPath)
         return
 
@@ -199,7 +203,13 @@ LoadStratagemsData() {
         return
 
     currentSection := ""
-    targetSections := "Defensive Stratagems|Offensive Stratagems|Supply Stratagems|Mission Stratagems"
+    ; Support both English and Russian section names based on language
+    lang := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
+    if (lang = "ru") {
+        targetSections := "Стратагемы Наступления|Стратагемы Снабжения|Стратагемы Обороны|Стратагемы Задания"
+    } else {
+        targetSections := "Defensive Stratagems|Offensive Stratagems|Supply Stratagems|Mission Stratagems"
+    }
     
     for line in StrSplit(fileContent, "`n", "`r") {
         line := Trim(line)

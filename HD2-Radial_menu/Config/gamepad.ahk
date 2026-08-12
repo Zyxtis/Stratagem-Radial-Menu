@@ -118,13 +118,13 @@ UpdateGamepadStatusText() {
     
     if (!GamepadEnabled) {
         gamepadStatusText.Opt("c808080")  ; Gray
-        gamepadStatusText.Value := "○ Disabled"
+        gamepadStatusText.Value := Lang.Get("gamepad_disabled")
     } else if (GamepadConnected) {
         gamepadStatusText.Opt("c00FF00")  ; Green
-        gamepadStatusText.Value := "● Connected"
+        gamepadStatusText.Value := Lang.Get("gamepad_connected")
     } else {
         gamepadStatusText.Opt("cFF0000")  ; Red
-        gamepadStatusText.Value := "○ Disconnected"
+        gamepadStatusText.Value := Lang.Get("gamepad_disconnected")
     }
 }
 
@@ -302,7 +302,7 @@ GamepadMenuHandler(*) {
                     ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
                 }
             }
-            ToolTip("Scrambler: No stratagems detected!", A_ScreenWidth - 200, A_ScreenHeight - 50)
+            ToolTip(Lang.Get("tooltip_scrambler_no_stratagems"), 5, 5)
             SetTimer(RemoveToolTip, -2000)
             return
         }
@@ -316,7 +316,7 @@ GamepadMenuHandler(*) {
     displayCount := OCRScramblerBypassEnabled ? Icon_GetCapturedCount() : ActiveStratagems.Length
 
     if (displayCount = 0) {
-        ToolTip("No stratagems in active profile!", A_ScreenWidth - 200, A_ScreenHeight - 50)
+        ToolTip(Lang.Get("tooltip_no_stratagems_profile"), 5, 5)
         SetTimer(RemoveToolTip, -2000)
         if (OCRScramblerBypassEnabled) {
             global ScramblerRadialMode
@@ -961,20 +961,20 @@ ShowOCRGamepadCapturePopup(*) {
 
     ; Reuse capture popup logic from menu button capture,
     ; but write result to OCRGamepadButton.
-    captureGui := Gui("-Caption +LastFound +AlwaysOnTop", "Capture OCR Gamepad Button")
+    captureGui := Gui("-Caption +LastFound +AlwaysOnTop", Lang.Get("capture_ocr_gamepad_button"))
     captureGui.BackColor := "202020"
     captureGui.SetFont("s10 cC4C4C4", "Segoe UI")
     captureGui.MarginX := Scale(5)
     captureGui.MarginY := Scale(5)
 
     captureGui.SetFont("cFFFFFF s12")
-    captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", "Capture OCR Gamepad Button").OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", Lang.Get("capture_ocr_gamepad_button")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.SetFont("s11 cC4C4C4")
 
-    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", "Press a button on your gamepad...")
+    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", Lang.Get("press_gamepad_button"))
     global ocrGamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", OCRGamepadButton = "" ? "[Not set]" : OCRGamepadButton)
-    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
 
     global ocrGamepadCaptureGui := captureGui
@@ -1121,20 +1121,20 @@ CaptureOCRGamepadButtonPopupFound(buttonName) {
 ShowBypassGamepadCapturePopup(*) {
     global BypassGamepadButton
 
-    captureGui := Gui("-Caption +LastFound +AlwaysOnTop", "Capture Bypass Button")
+    captureGui := Gui("-Caption +LastFound +AlwaysOnTop", Lang.Get("capture_bypass_button"))
     captureGui.BackColor := "202020"
     captureGui.SetFont("s10 cC4C4C4", "Segoe UI")
     captureGui.MarginX := Scale(5)
     captureGui.MarginY := Scale(5)
 
     captureGui.SetFont("cFFFFFF s12")
-    captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", "Capture Bypass Button").OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", Lang.Get("capture_bypass_button")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.SetFont("s11 cC4C4C4")
 
-    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", "Press a button on your gamepad...")
+    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", Lang.Get("press_gamepad_button"))
     global bypassGamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", BypassGamepadButton = "" ? "[Not set]" : BypassGamepadButton)
-    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
 
     global bypassGamepadCaptureGui := captureGui
@@ -1282,7 +1282,7 @@ ShowGamepadCapturePopup(*) {
     global GamepadMenuButton, GamepadType, GamepadButtonNames
     
     ; Create capture popup
-    captureGui := Gui("-Caption +LastFound +AlwaysOnTop", "Capture Gamepad Button")
+    captureGui := Gui("-Caption +LastFound +AlwaysOnTop", Lang.Get("capture_gamepad_button"))
     captureGui.BackColor := "202020"
     captureGui.SetFont("s10 cC4C4C4", "Segoe UI")
     captureGui.MarginX := Scale(5)
@@ -1290,17 +1290,17 @@ ShowGamepadCapturePopup(*) {
     
     ; Title bar
     captureGui.SetFont("cFFFFFF s12")
-    captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", "Capture Gamepad Button").OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", Lang.Get("capture_gamepad_button")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.SetFont("s11 cC4C4C4")
     
-    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", "Press a button on your gamepad...")
+    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", Lang.Get("press_gamepad_button"))
     
     ; Current button display
     global gamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", GamepadMenuButton)
     
     ; Cancel button
-    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), "Cancel").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
     
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
     
