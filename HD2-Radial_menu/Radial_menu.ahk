@@ -3,19 +3,27 @@
 #Include Config\gamepad.ahk
 #Include Config\OCR_GDI.ahk
 #Include Config\assistants.ahk
+#Include Config\language.ahk
+CoordMode("ToolTip", "Screen")
+
+; ===GLOBAL VARIABLES===
+; Paths (must be defined before LoadLanguage)
+global IniPath := A_ScriptDir "\Config\settings.ini"
+global ProfilesIniPath := A_ScriptDir "\Config\profiles.ini"
+global OCRProfileIniPath := A_ScriptDir "\Config\ocr.ini"
 
 ; Load GUI Scale from settings.ini
 LoadGUIScale()
+LoadLanguage()
 OnExit(ExitRoutine)
 OnError(ErrorHandler)
 
-; ===GLOBAL VARIABLES===
 ; Input Settings
 global StratagemMenuKey := "LControl", RadialMenuKey := "MButton", PostMenuDelay := 25, RealKeyDelay := 25, InputLayout := "Arrows"
 global CustomUpKey := "w", CustomDownKey := "s", CustomLeftKey := "a", CustomRightKey := "d"
 global MenuInputType := 5  ; 1=Tap, 2=Double Tap, 3=Press, 4=Long Press, 5=Hold
 global SuspendHotkey := "Insert", ExitHotkey := "End", DisplayToggleHotkey := "F1"
-global RadialMenuKeyWildcard := false
+global RadialMenuKeyWildcard := true
 global RadialMenuKeyMode := "Hold"  ; "Hold" or "Toggle"
 
 ; Radial Menu UI
@@ -23,10 +31,7 @@ global MenuSize := 500, InnerRadius := 70, IconSize := 48, TextSize := 9, ShowTe
 global ScreenCX := A_ScreenWidth // 2, ScreenCY := A_ScreenHeight // 2
 
 ; State Tracking
-global IsMenuVisible := false, SelectedSector := 0, IsExecutingMacro := false
-global IniPath := A_ScriptDir "\Config\settings.ini", radialGui := 0
-global ProfilesIniPath := A_ScriptDir "\Config\profiles.ini"
-global OCRProfileIniPath := A_ScriptDir "\Config\ocr.ini"
+global IsMenuVisible := false, SelectedSector := 0, IsExecutingMacro := false, radialGui := 0
 
 ; Game Check
 global AutoPauseActive := false, AutoCloseActive := false, AutoCloseCountdownActive := false
@@ -73,7 +78,7 @@ global ActiveKeybindStratagems := []
 global KeybindListVisibility := Map()
 
 ; Alt Keys for DropDownList
-AltKeys := ["LControl", "RControl", "LShift", "RShift", "LAlt", "RAlt", "LWin", "RWin", "Tab", "XButton1", "XButton2", "MButton", "LButton", "RButton", "WheelUp", "WheelDown"]
+AltKeys := ["LControl", "RControl", "LShift", "RShift", "LAlt", "RAlt", "LWin", "RWin", "Tab", "XButton1", "XButton2", "MButton", "LButton", "RButton", "NumpadEnter", "NumpadDel", "PrintScreen", "Space", "Backspace", "Enter", "Escape", "WheelUp", "WheelDown"]
 AltChoiceList := ["[Input]"]
 for key in AltKeys
     AltChoiceList.Push(key)
@@ -177,16 +182,18 @@ class HotkeyInput {
         this.controls.ddl := gui.Add("DropDownList", posDDL, filteredList)
         this.controls.ddl.OnEvent("Change", this.OnDDLChange.Bind(this))
         
-        ; Wildcard checkbox (optional)
+        ; Get DDL position for consistent checkbox and hotkey field alignment
+        this.controls.ddl.GetPos(&ddlX, &ddlY, &ddlW, &ddlH)
+        
+        ; Wildcard checkbox (optional) - aligned next to the DDL using its actual position
         if (this.hasWildcard) {
-            this.controls.wildcardCb := gui.Add("CheckBox", "x+5 yp", "*")
+            this.controls.wildcardCb := gui.Add("CheckBox", "x" (ddlX + ddlW + 5) " y" ddlY, "*")
             this.controls.wildcardCb.Value := this.wildcard
             this.controls.wildcardCb.OnEvent("Click", this.OnWildcardClick.Bind(this))
         }
         
-        ; Hotkey input field - smaller gap if no wildcard checkbox
-        hotkeyGap := this.hasWildcard ? 10 : 2
-        this.controls.hotkey := gui.Add("Hotkey", "w" . Scale(100) . " x" . Scale(x) . " y+" . Scale(hotkeyGap), this.value)
+        ; Hotkey input field - positioned below the DDL bottom edge
+        this.controls.hotkey := gui.Add("Hotkey", "w" . Scale(100) . " x" . Scale(x) . " y" (ddlY + ddlH + Scale(2)), this.value)
         this.controls.hotkey.OnEvent("Change", this.OnHotkeyChange.Bind(this))
         
         ; Set initial DDL value
@@ -268,7 +275,7 @@ IL_ID := InitIconImageList()
 iconSizeScaled := Scale(32)
 
 ; ===MAIN GUI===
-settingsGui := Gui("-Caption +LastFound", "Stratagem Radial Menu")
+settingsGui := Gui("-Caption +LastFound", Lang.Get("app_title"))
 settingsGui.BackColor := "202020"
 baseFontSize := Scale(10)
 settingsGui.SetFont("s" baseFontSize " cC4C4C4", "Segoe UI")
@@ -280,37 +287,38 @@ titleFontSize := Scale(12)
 settingsGui.SetFont("cFFFFFF s" titleFontSize)
 StatusText := settingsGui.Add("Text", "x0 y0 w" Scale(30) " h" Scale(30) " Background2A2A2A Border +Center c00FF00", "●")
 StatusText.OnEvent("Click", ToggleSuspend)
-settingsGui.Add("Text", "x+0 y0 w" Scale(315) " h" Scale(30) " Background2A2A2A Border +Center", "Stratagem Radial Menu").OnEvent("Click", StartMove)
+settingsGui.Add("Text", "x+0 y0 w" Scale(315) " h" Scale(30) " Background2A2A2A Border +Center", Lang.Get("app_title")).OnEvent("Click", StartMove)
+
 settingsGui.Add("Button", "x+5 y0 w" Scale(30) " h" Scale(30), "—").OnEvent("Click", (*) => settingsGui.Hide())
 settingsGui.Add("Button", "x+5 y0 w" Scale(30) " h" Scale(30), "X").OnEvent("Click", (*) => ExitApp())
 settingsGui.SetFont("s" baseFontSize " cC4C4C4")
 
-mainTab := settingsGui.Add("Tab2", "x" Scale(10) " y" Scale(35) " w" Scale(400) " h" Scale(640), ["Radial Menu", "Keybinds", "Settings", "Misc"])
+mainTab := settingsGui.Add("Tab2", "x" Scale(10) " y" Scale(35) " w" Scale(400) " h" Scale(640), [Lang.Get("tab_radial"), Lang.Get("tab_keybinds"), Lang.Get("tab_settings"), Lang.Get("tab_misc")])
 mainTab.OnEvent("Change", ClearTabFocus)
 
 ; ---Tab 1: Radial Menu---
 mainTab.UseTab(1)
 
 ; Profile Section
-settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), "📂 Profile:")
+settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), Lang.Get("profile"))
 ProfileDDL := settingsGui.Add("DropDownList", "x" Scale(25) " y+" Scale(5) " w" Scale(370) " vProfileDDL Background2f2f2f", GetProfilesList("radial"))
 ProfileDDL.OnEvent("Change", SwitchProfileDDLHandler)
 SetProfileDDL("radial")
 
-btnNewProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x" Scale(25) " y+" Scale(5), "➕ New Profile")
+btnNewProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x" Scale(25) " y+" Scale(5), Lang.Get("new_profile"))
 btnNewProf.OnEvent("Click", CreateRadialProfileHandler)
 
-btnDelProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x+" Scale(10) " yp", "❌ Delete Profile")
+btnDelProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x+" Scale(10) " yp", Lang.Get("delete_profile"))
 btnDelProf.OnEvent("Click", DeleteRadialProfileHandler)
 
 ; Active Stratagems Section and ListView
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), "Active Stratagems:")
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), Lang.Get("active_stratagems"))
 
-lbActive := settingsGui.Add("ListView", "x" Scale(25) " y+" Scale(5) " r12 w" Scale(370) " h" Scale(380) " vActiveList Multi Background000000", ["Icon", "Name", "Category"])
+lbActive := settingsGui.Add("ListView", "x" Scale(25) " y+" Scale(5) " r12 w" Scale(370) " h" Scale(380) " vActiveList Multi Background000000", [Lang.Get("icon"), Lang.Get("name"), Lang.Get("category")])
 lbActive.SetImageList(IL_ID, 1)
-lbActive.ModifyCol(1, iconSizeScaled + Scale(4))  ; Icon column width = icon size + small padding
-lbActive.ModifyCol(2, Scale(210))
-lbActive.ModifyCol(3, Scale(80))
+lbActive.ModifyCol(1, iconSizeScaled + Scale(25))  ; Icon column width = icon size + small padding
+lbActive.ModifyCol(2, Scale(200))
+lbActive.ModifyCol(3, Scale(90))
 UpdateActiveList()
 
 btnAdd := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x" Scale(25) " y+" Scale(10), "+")
@@ -325,7 +333,7 @@ btnUp.OnEvent("Click", (*) => MoveItem(-1))
 btnDown := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(5) " yp", "▼")
 btnDown.OnEvent("Click", (*) => MoveItem(1))
 
-global helpText1 := settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(300) " cGray", "")
+global helpText1 := settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(360) " cGray", "")
 
 ; Keybind selection popup controls
 global keybindSelectionGui := 0
@@ -339,24 +347,24 @@ UpdateHelpTextOCR()
 mainTab.UseTab(2)
 
 ; Profile Section for Keybinds
-settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), "📂 Keybind Profile:")
+settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), Lang.Get("keybind_profile"))
 keybindProfileDDL := settingsGui.Add("DropDownList", "x" Scale(25) " y+" Scale(5) " w" Scale(370) " vKeybindProfileDDL Background2f2f2f", GetProfilesList("keybind"))
 keybindProfileDDL.OnEvent("Change", SwitchKeybindProfileDDLHandler)
 SetProfileDDL("keybind")
 
-btnNewKeybindProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x" Scale(25) " y+" Scale(5), "➕ New Profile")
+btnNewKeybindProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x" Scale(25) " y+" Scale(5), Lang.Get("new_profile"))
 btnNewKeybindProf.OnEvent("Click", CreateKeybindProfileHandler)
 
-btnDelKeybindProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x+" Scale(10) " yp", "❌ Delete Profile")
+btnDelKeybindProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x+" Scale(10) " yp", Lang.Get("delete_profile"))
 btnDelKeybindProf.OnEvent("Click", DeleteKeybindProfileHandler)
 
 ; Active Keybinds Section
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), "Active Keybinds:")
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), Lang.Get("active_keybinds"))
 
-lbKeybinds := settingsGui.Add("ListView", "x" Scale(25) " y+" Scale(5) " r12 w" Scale(370) " h" Scale(380) " vKeybindsList Multi Background000000", ["Icon", "Name", "Hotkey", "👁"])
+lbKeybinds := settingsGui.Add("ListView", "x" Scale(25) " y+" Scale(5) " r12 w" Scale(370) " h" Scale(380) " vKeybindsList Multi Background000000", [Lang.Get("icon"), Lang.Get("name"), Lang.Get("hotkey"), Lang.Get("visibility")])
 lbKeybinds.SetImageList(IL_ID, 1)
-lbKeybinds.ModifyCol(1, iconSizeScaled + Scale(4))
-lbKeybinds.ModifyCol(2, Scale(190))
+lbKeybinds.ModifyCol(1, iconSizeScaled + Scale(25))
+lbKeybinds.ModifyCol(2, Scale(180))
 lbKeybinds.ModifyCol(3, Scale(80))
 lbKeybinds.ModifyCol(4, Scale(30))
 lbKeybinds.OnEvent("DoubleClick", ShowKeybindCapture)
@@ -367,19 +375,21 @@ btnAddKeybind.OnEvent("Click", (*) => ShowKeybindSelectionGui())
 btnRemKeybind := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(5) " yp", "-")
 btnRemKeybind.OnEvent("Click", (*) => RemoveFromKeybinds())
 
-btnClearKeybind := settingsGui.Add("Button", "w" Scale(90) " h" Scale(30) " x+" Scale(5) " yp", "Clear Hotkey")
+btnClearKeybind := settingsGui.Add("Button", "w" Scale(125) " h" Scale(30) " x+" Scale(5) " yp", Lang.Get("clear_hotkey"))
 btnClearKeybind.OnEvent("Click", ClearSelectedKeybind)
 
-btnToggleVisibility := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x+" Scale(70) " yp", "👁")
+btnToggleVisibility := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x+" Scale(35) " yp", "👁")
 btnToggleVisibility.OnEvent("Click", ToggleKeybindVisibility)
 
-btnKeyUp := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(5) " yp", "▲")
+; Calculate position for up/down buttons matching the radial tab layout (avoids cumulative rounding from multiple x+ steps)
+keybindBtnX := Scale(25) + Scale(40) + Scale(5) + Scale(40) + Scale(200)
+btnKeyUp := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x" keybindBtnX " yp", "▲")
 btnKeyUp.OnEvent("Click", (*) => MoveKeybindItem(-1))
 
-btnKeyDown := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(5) " yp", "▼")
+btnKeyDown := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x" (keybindBtnX + Scale(40) + Scale(5)) " yp", "▼")
 btnKeyDown.OnEvent("Click", (*) => MoveKeybindItem(1))
 
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(370) " cGray", "Double-click on a stratagem to set a hotkey.")
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(370) " cGray", Lang.Get("double_click_hint"))
 
 global helpText2 := settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(370) " cGray", "")
 UpdateHelpText2()
@@ -387,24 +397,24 @@ UpdateHelpText2()
 ; ---Tab 3: Settings---
 mainTab.UseTab(3)
 
-settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), "Radial Menu Key:")
+settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), Lang.Get("radial_menu_key"))
 global radialMenuKeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: RadialMenuKey, wildcard: RadialMenuKeyWildcard, hasWildcard: true, onChanged: OnRadialMenuKeyChange, onWildcardChanged: OnRadialMenuKeyWildcardChange, excludeKeys: ["WheelUp", "WheelDown"]})
-global radialMenuKeyModeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(2.5) " Background2f2f2f", ["Hold", "Toggle"])
+global radialMenuKeyModeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(2.5) " Background2f2f2f", [Lang.Get("hold"), Lang.Get("toggle")])
 if (RadialMenuKeyMode = "Toggle")
     radialMenuKeyModeDDL.Choose(2)
 else
     radialMenuKeyModeDDL.Choose(1)
 radialMenuKeyModeDDL.OnEvent("Change", OnRadialMenuKeyModeChange)
 
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(200), "Stratagem Menu:")
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(200), Lang.Get("stratagem_menu"))
 global stratagemMenuKeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: StratagemMenuKey, hasWildcard: false, onChanged: OnStratagemMenuKeyChange})
 
-menuInputTypeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(2.5) " Background2f2f2f", ["Tap", "Double Tap", "Press", "Long Press", "Hold"])
+menuInputTypeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(2.5) " Background2f2f2f", [Lang.Get("tap"), Lang.Get("double_tap"), Lang.Get("press"), Lang.Get("long_press"), Lang.Get("hold_input")])
 menuInputTypeDDL.Choose(MenuInputType)
 menuInputTypeDDL.OnEvent("Change", (*) => UpdateMenuInputType())
 
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(200), "Input Layout:")
-inputLayoutDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(5) " Background2f2f2f", ["Arrows", "WASD", "[Custom]"])
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(200), Lang.Get("input_layout"))
+inputLayoutDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(25) " y+" Scale(5) " Background2f2f2f", [Lang.Get("arrows"), Lang.Get("wasd"), Lang.Get("custom")])
 if (InputLayout = "WASD")
     inputLayoutDDL.Choose(2)
 else if (InputLayout = "Custom")
@@ -413,47 +423,47 @@ else
     inputLayoutDDL.Choose(1)
 inputLayoutDDL.OnEvent("Change", (*) => UpdateInputLayout())
 
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(320), "Delays:")
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(320), Lang.Get("delays"))
 
 postMenuDelayEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(25) " y+" Scale(5) " Number Background2f2f2f", PostMenuDelay)
-settingsGui.Add("Text", "x+5 w" Scale(200), "Post Menu (ms)")
+settingsGui.Add("Text", "x+5 w" Scale(200), Lang.Get("post_menu"))
 postMenuDelayEdit.OnEvent("Change", (*) => UpdatePostMenuDelay())
 
 realKeyDelayEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(25) " y+" Scale(10) " Number Background2f2f2f", RealKeyDelay)
-settingsGui.Add("Text", "x+5 w" Scale(200), "Key Press (ms)")
+settingsGui.Add("Text", "x+5 w" Scale(200), Lang.Get("key_press"))
 realKeyDelayEdit.OnEvent("Change", (*) => UpdateRealKeyDelay())
 
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), "General Hotkeys:")
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), Lang.Get("general_hotkeys"))
 displayToggleHotkeyInput := settingsGui.Add("Hotkey", "w" Scale(100) " x" Scale(25) " y+" Scale(5), DisplayToggleHotkey)
-settingsGui.Add("Text", "x+5 w" Scale(200), "(GUI Toggle)")
+settingsGui.Add("Text", "x+5 w" Scale(200), Lang.Get("gui_toggle"))
 displayToggleHotkeyInput.OnEvent("Change", (*) => UpdateDisplayToggleHotkey())
 
 suspendHotkeyInput := settingsGui.Add("Hotkey", "w" Scale(100) " x" Scale(25) " y+" Scale(10), SuspendHotkey)
-settingsGui.Add("Text", "x+5 w" Scale(200), "(Suspend)")
+settingsGui.Add("Text", "x+5 w" Scale(200), Lang.Get("suspend"))
 suspendHotkeyInput.OnEvent("Change", (*) => UpdateSuspendHotkey())
 
 exitHotkeyInput := settingsGui.Add("Hotkey", "w" Scale(100) " x" Scale(25) " y+" Scale(10), ExitHotkey)
-settingsGui.Add("Text", "x+5 w" Scale(200), "(Exit)")
+settingsGui.Add("Text", "x+5 w" Scale(200), Lang.Get("exit"))
 exitHotkeyInput.OnEvent("Change", (*) => UpdateExitHotkey())
 
 ; Profile Switch Hotkeys
-settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), "Profile Switch Hotkeys:")
+settingsGui.Add("Text", "x" Scale(25) " y+" Scale(15) " w" Scale(200), Lang.Get("profile_switch"))
 
 ; Next Profile Hotkey
 global profileNextHotkeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: ProfileNextHotkey, wildcard: ProfileNextHotkeyWildcard, hasWildcard: true, onChanged: OnProfileNextHotkeyChange, onWildcardChanged: OnProfileNextHotkeyWildcardChange})
-settingsGui.Add("Text", "x" Scale(130) " yp w" Scale(85), "(Next Profile)")
+settingsGui.Add("Text", "x" Scale(130) " yp w" Scale(105), Lang.Get("next_profile"))
 
 ; Small spacer
 settingsGui.Add("Text", "x" Scale(25) " y+" Scale(5) " w" Scale(1) " h" Scale(1), "")
 
 ; Prev Profile Hotkey
 global profilePrevHotkeyInput := HotkeyInput(settingsGui, 25, 0, "", {value: ProfilePrevHotkey, wildcard: ProfilePrevHotkeyWildcard, hasWildcard: true, onChanged: OnProfilePrevHotkeyChange, onWildcardChanged: OnProfilePrevHotkeyWildcardChange})
-settingsGui.Add("Text", "x" Scale(130) " yp w" Scale(85), "(Prev Profile)")
+settingsGui.Add("Text", "x" Scale(130) " yp w" Scale(105), Lang.Get("prev_profile"))
 
-; GUI Scale - GroupBox
-settingsGui.Add("GroupBox", "x" Scale(255) " y" Scale(65) " w" Scale(145) " h" Scale(70), "GUI Scale")
-guiScaleDDL := settingsGui.Add("DropDownList", "w" Scale(55) " x" Scale(265) " y" Scale(85) " Background2f2f2f", ["1.0", "1.25", "1.5", "1.75", "2.0"])
-settingsGui.Add("Text", "x+5 yp w" Scale(70), "(Scale Size)")
+; GUI Settings - GroupBox
+settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(65) " w" Scale(155) " h" Scale(80), Lang.Get("gui_settings"))
+guiScaleDDL := settingsGui.Add("DropDownList", "w" Scale(55) " x" Scale(255) " y" Scale(85) " Background2f2f2f", ["1.0", "1.25", "1.5", "1.75", "2.0"])
+settingsGui.Add("Text", "x+5 yp w" Scale(70), Lang.Get("scale_size"))
 ; Find and select current scale
 scaleValues := [1.0, 1.25, 1.5, 1.75, 2.0]
 selectedIndex := 1  ; Default to 1.0 (index 1)
@@ -465,70 +475,76 @@ for index, val in scaleValues {
 }
 guiScaleDDL.Choose(selectedIndex)
 guiScaleDDL.OnEvent("Change", (*) => UpdateGUIScale())
-settingsGui.Add("Text", "x" Scale(265) " y+" Scale(10) " cGray", "Requires reload")
+
+global langDDL := settingsGui.Add("DropDownList", "w" Scale(55) " x" Scale(255) " y+" Scale(10)  " Background2f2f2f", ["EN", "RU"])
+if (CurrentLanguage = "ru")
+    langDDL.Choose(2)
+else
+    langDDL.Choose(1)
+langDDL.OnEvent("Change", (*) => SwitchLanguage())
+
+settingsGui.Add("Text", "x+5 yp w" Scale(70), Lang.Get("language_choice"))
 
 ; Radial Menu UI - GroupBox
-settingsGui.Add("GroupBox", "x" Scale(255) " y" Scale(140) " w" Scale(145) " h" Scale(155), "Radial Menu UI")
-menuSizeEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(265) " y" Scale(160) " Number Background2f2f2f", MenuSize)
-settingsGui.Add("Text", "x+5 yp w" Scale(85), "(Menu Size)")
+settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(150) " w" Scale(155) " h" Scale(155), Lang.Get("radial_menu_ui"))
+menuSizeEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(255) " y" Scale(170) " Number Background2f2f2f", MenuSize)
+settingsGui.Add("Text", "x+5 yp w" Scale(95), Lang.Get("menu_size"))
 menuSizeEdit.OnEvent("Change", (*) => UpdateMenuSize())
 
-innerRadiusEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(265) " y+" Scale(10) " Number Background2f2f2f", InnerRadius)
-settingsGui.Add("Text", "x+5 yp w" Scale(85), "(Inner Radius)")
+innerRadiusEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(255) " y+" Scale(10) " Number Background2f2f2f", InnerRadius)
+settingsGui.Add("Text", "x+5 yp w" Scale(95), Lang.Get("inner_radius"))
 innerRadiusEdit.OnEvent("Change", (*) => UpdateInnerRadius())
 
-iconSizeEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(265) " y+" Scale(10) " Number Background2f2f2f", IconSize)
-settingsGui.Add("Text", "x+5 yp w" Scale(85), "(Icon Size)")
+iconSizeEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(255) " y+" Scale(10) " Number Background2f2f2f", IconSize)
+settingsGui.Add("Text", "x+5 yp w" Scale(95), Lang.Get("icon_size"))
 iconSizeEdit.OnEvent("Change", (*) => UpdateIconSize())
 
-textSizeEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(265) " y+" Scale(10) " Number Background2f2f2f", TextSize)
-settingsGui.Add("Text", "x+5 yp w" Scale(85), "(Text Size)")
+textSizeEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(255) " y+" Scale(10) " Number Background2f2f2f", TextSize)
+settingsGui.Add("Text", "x+5 yp w" Scale(95), Lang.Get("text_size"))
 textSizeEdit.OnEvent("Change", (*) => UpdateTextSize())
 
-settingsGui.Add("Text", "x" Scale(265) " y+" Scale(10) " w" Scale(65), "Show Text:")
+settingsGui.Add("Text", "x" Scale(255) " y+" Scale(10), Lang.Get("show_text"))
 showTextCheckbox := settingsGui.Add("CheckBox", "x+5 yp vShowText")
 showTextCheckbox.Value := ShowText
 showTextCheckbox.OnEvent("Click", (*) => UpdateShowText())
 
 ; Camera Lock Bypass - GroupBox
-settingsGui.Add("GroupBox", "x" Scale(255) " y" Scale(300) " w" Scale(145) " h" Scale(185), "Camera Lock Bypass")
-settingsGui.Add("Text", "x" Scale(265) " y" Scale(320) " w" Scale(65), "Lock Cam:")
+settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(310) " w" Scale(155) " h" Scale(155), Lang.Get("camera_lock_bypass"))
+settingsGui.Add("Text", "x" Scale(255) " y" Scale(330), Lang.Get("lock_cam"))
 blockCameraCheckbox := settingsGui.Add("CheckBox", "x+5 yp vBlockCameraBypass")
 blockCameraCheckbox.Value := BlockCameraBypass
 blockCameraCheckbox.OnEvent("Click", (*) => ToggleBlockCamera())
 
-settingsGui.Add("Text", "x" Scale(265) " y+" Scale(5) " w" Scale(120), "Open Map Key:")
-global openMapKeyInput := HotkeyInput(settingsGui, 265, 0, "", {value: OpenMapKey, hasWildcard: false, onChanged: OnOpenMapKeyChange})
-
-settingsGui.Add("Text", "x" Scale(265) " y+" Scale(5) " w" Scale(120), "Map Key Type:")
-mapInputTypeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(265) " y+" Scale(5) " Background2f2f2f", ["Tap", "Double Tap", "Press", "Long Press", "Hold"])
+settingsGui.Add("Text", "x" Scale(255) " y+" Scale(5) " w" Scale(120), Lang.Get("open_map_key"))
+global openMapKeyInput := HotkeyInput(settingsGui, 255, 0, "", {value: OpenMapKey, hasWildcard: false, onChanged: OnOpenMapKeyChange})
+mapInputTypeDDL := settingsGui.Add("DropDownList", "w" Scale(100) " x" Scale(255) " y+" Scale(2.5) " Background2f2f2f", [Lang.Get("tap"), Lang.Get("double_tap"), Lang.Get("press"), Lang.Get("long_press"), Lang.Get("hold_input")])
 mapInputTypeDDL.Choose(MapInputType)
 mapInputTypeDDL.OnEvent("Change", (*) => UpdateMapInputType())
 
 ; Active Game Check - GroupBox
-settingsGui.Add("GroupBox", "x" Scale(255) " y" Scale(490) " w" Scale(145) " h" Scale(105), "Active Game Check")
-settingsGui.Add("Text", "x" Scale(265) " y" Scale(510) " w" Scale(70), "Auto-Pause:")
+settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(470) " w" Scale(155) " h" Scale(105), Lang.Get("active_game_check"))
+settingsGui.Add("Text", "x" Scale(255) " y" Scale(490), Lang.Get("auto_pause"))
 autoPauseCheckbox := settingsGui.Add("CheckBox", "x+5 yp vAutoPauseActive")
 autoPauseCheckbox.Value := AutoPauseActive
 autoPauseCheckbox.OnEvent("Click", (*) => ToggleAutoPause())
 
-settingsGui.Add("Text", "x" Scale(265) " y+" Scale(8) " w" Scale(70), "Auto-Close:")
+settingsGui.Add("Text", "x" Scale(255) " y+" Scale(8), Lang.Get("auto_close"))
 autoCloseCheckbox := settingsGui.Add("CheckBox", "x+5 yp vAutoCloseActive")
 autoCloseCheckbox.Value := AutoCloseActive
 autoCloseCheckbox.OnEvent("Click", (*) => ToggleAutoClose())
 
-gameCheckTimerEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(265) " y+" Scale(5) " Number Background2f2f2f", GameCheckTimerInterval)
-settingsGui.Add("Text", "x+5 yp w" Scale(80), "(ms) Interval")
+gameCheckTimerEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(255) " y+" Scale(5) " Number Background2f2f2f", GameCheckTimerInterval)
+settingsGui.Add("Text", "x+5 yp w" Scale(90), Lang.Get("interval"))
 gameCheckTimerEdit.OnEvent("Change", (*) => UpdateGameCheckTimer())
 
 ; Auto Language Switch - GroupBox
-settingsGui.Add("GroupBox", "x" Scale(255) " y" Scale(600) " w" Scale(145) " h" Scale(70), "Auto Language Switch")
-settingsGui.Add("Text", "x" Scale(265) " y" Scale(618) " w" Scale(70), "Auto Lang:")
+settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(580) " w" Scale(155) " h" Scale(80), Lang.Get("auto_language_switch"))
+settingsGui.Add("Text", "x" Scale(255) " y" Scale(600), Lang.Get("auto_lang"))
 autoLangCheckbox := settingsGui.Add("CheckBox", "x+5 yp vAutoLanguageSwitch")
 autoLangCheckbox.Value := AutoLanguageSwitch
 autoLangCheckbox.OnEvent("Click", (*) => ToggleAutoLanguageSwitch())
 
-autoLangLayoutDDL := settingsGui.Add("DropDownList", "x" Scale(260) " y+" Scale(5) " w" Scale(135) " Background2f2f2f", EnglishLayoutNames)
+autoLangLayoutDDL := settingsGui.Add("DropDownList", "x" Scale(255) " y+" Scale(5) " w" Scale(135) " Background2f2f2f", EnglishLayoutNames)
 ; Find and select current layout
 for idx, code in EnglishLayoutCodes {
     if (code = AutoLanguageLayout) {
@@ -541,101 +557,101 @@ autoLangLayoutDDL.OnEvent("Change", UpdateAutoLanguageLayout)
 mainTab.UseTab(4)
 
 ; Keybind List Overlay settings
-settingsGui.Add("GroupBox", "x" Scale(25) " y" Scale(65) " w" Scale(170) " h" Scale(280), "Keybind List Overlay")
+settingsGui.Add("GroupBox", "x" Scale(25) " y" Scale(65) " w" Scale(170) " h" Scale(280), Lang.Get("keybind_list_overlay"))
 
-settingsGui.Add("Text", "x" Scale(35) " y" Scale(90) " w" Scale(120), "Toggle Hotkey:")
+settingsGui.Add("Text", "x" Scale(35) " y" Scale(90) " w" Scale(120), Lang.Get("toggle_hotkey"))
 global keybindListHotkeyInput := HotkeyInput(settingsGui, 35, 0, "", {value: KeybindListHotkey, wildcard: KeybindListHotkeyWildcard, hasWildcard: true, onChanged: OnKeybindListHotkeyChange, onWildcardChanged: OnKeybindListHotkeyWildcardChange, excludeKeys: ["WheelUp", "WheelDown"]})
 
-settingsGui.Add("Text", "x" Scale(35) " y+" Scale(10) " w" Scale(120), "Drag Delay (ms):")
+settingsGui.Add("Text", "x" Scale(35) " y+" Scale(10) " w" Scale(120), Lang.Get("drag_delay"))
 keybindListDragDelayEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(35) " y+" Scale(5) " Number Background2f2f2f", KeybindListDragDelay)
-settingsGui.Add("Text", "x+5 yp w" Scale(80), "(Hold time)")
+settingsGui.Add("Text", "x+5 yp w" Scale(100), Lang.Get("hold_time"))
 keybindListDragDelayEdit.OnEvent("Change", (*) => UpdateKeybindListDragDelay())
 
 ; Show/hide fields checkboxes
-settingsGui.Add("Text", "x" Scale(35) " y+" Scale(15) " w" Scale(120), "Show Fields:")
-keybindListShowIconCb := settingsGui.Add("CheckBox", "x" Scale(35) " y+" Scale(5) " vKeybindListShowIcon", "Icon")
+settingsGui.Add("Text", "x" Scale(35) " y+" Scale(15) " w" Scale(120), Lang.Get("show_fields"))
+keybindListShowIconCb := settingsGui.Add("CheckBox", "x" Scale(35) " y+" Scale(5) " vKeybindListShowIcon", Lang.Get("icon_short"))
 keybindListShowIconCb.Value := KeybindListShowIcon
 keybindListShowIconCb.OnEvent("Click", (*) => UpdateKeybindListShowFields())
 
-keybindListShowHotkeyCb := settingsGui.Add("CheckBox", "x+" Scale(2) " vKeybindListShowHotkey", "Key")
+keybindListShowHotkeyCb := settingsGui.Add("CheckBox", "x+" Scale(2) " vKeybindListShowHotkey", Lang.Get("key_short"))
 keybindListShowHotkeyCb.Value := KeybindListShowHotkey
 keybindListShowHotkeyCb.OnEvent("Click", (*) => UpdateKeybindListShowFields())
 
-keybindListShowNameCb := settingsGui.Add("CheckBox", "x+" Scale(2) " vKeybindListShowName", "Name")
+keybindListShowNameCb := settingsGui.Add("CheckBox", "x+" Scale(2) " vKeybindListShowName", Lang.Get("name_short"))
 keybindListShowNameCb.Value := KeybindListShowName
 keybindListShowNameCb.OnEvent("Click", (*) => UpdateKeybindListShowFields())
 
 ; Transparency slider
-settingsGui.Add("Text", "x" Scale(35) " y+" Scale(10) " w" Scale(120), "Transparency:")
+settingsGui.Add("Text", "x" Scale(35) " y+" Scale(10) " w" Scale(120), Lang.Get("transparency"))
 keybindListTransparencySlider := settingsGui.Add("Slider", "x" Scale(35) " y+" Scale(5) " w" Scale(110) " Range15-255", KeybindListTransparency)
 keybindListTransparencySlider.OnEvent("Change", (*) => UpdateKeybindListTransparency())
 keybindListTransparencyText := settingsGui.Add("Text", "x+10 yp w" Scale(20), KeybindListTransparency)
 
 ; Assistants - GroupBox
-settingsGui.Add("GroupBox", "x" Scale(25) " y" Scale(350) " w" Scale(170) " h" Scale(315), "Assistants")
+settingsGui.Add("GroupBox", "x" Scale(25) " y" Scale(350) " w" Scale(170) " h" Scale(315), Lang.Get("assistants"))
 
 ; Weapon Assistant label
-settingsGui.Add("Text", "x" Scale(35) " y" Scale(375) " w" Scale(150), "Weapon Assistant:")
+settingsGui.Add("Text", "x" Scale(35) " y" Scale(375) " w" Scale(150), Lang.Get("weapon_assistant"))
 
 ; Toggle hotkey for weapon assistant on/off
 global wpToggleInput := HotkeyInput(settingsGui, 35, 0, "", {value: ToggleWeaponHotkey, wildcard: ToggleWeaponHotkeyWildcard, hasWildcard: true, onChanged: OnWPToggleChange, onWildcardChanged: OnWPToggleWildcardChange})
 
 ; Status indicator text
-global wpStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(40) " Background2A2A2A", "○ OFF")
+global wpStatusText := settingsGui.Add("Text", "x+" Scale(3) " w" Scale(52) " Background2A2A2A", Lang.Get("status_off"))
 
 ; Settings button
-btnWPSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), "Settings")
+btnWPSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), Lang.Get("settings_btn"))
 btnWPSettings.OnEvent("Click", ShowWeaponAssistantSettings)
 
 ; Driver Assistant label
-settingsGui.Add("Text", "x" Scale(35) " y+" Scale(10) " w" Scale(150), "Driver Assistant:")
+settingsGui.Add("Text", "x" Scale(35) " y+" Scale(10) " w" Scale(150), Lang.Get("driver_assistant"))
 
 ; Toggle hotkey for driver assistant on/off
 global daToggleInput := HotkeyInput(settingsGui, 35, 0, "", {value: ToggleDriverHotkey, wildcard: ToggleDriverHotkeyWildcard, hasWildcard: true, onChanged: OnDAToggleChange, onWildcardChanged: OnDAToggleWildcardChange})
 
 ; Status indicator text
-global daStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(40) " Background2A2A2A", "○ OFF")
+global daStatusText := settingsGui.Add("Text", "x+" Scale(3) " w" Scale(52) " Background2A2A2A", Lang.Get("status_off"))
 
 ; Settings button
-btnDASettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), "Settings")
+btnDASettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), Lang.Get("settings_btn"))
 btnDASettings.OnEvent("Click", ShowDriverAssistantSettings)
 
 ; Separator line before Inventory Manager and Weapon Quick Switch
 settingsGui.Add("Text", "x" Scale(26) " y+" Scale(7.5) " w" Scale(168) " h1" " Backgroundffffff", "")
 
 ; Inventory Manager
-btnIMSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(7.5) " w" Scale(100) " h" Scale(24), "Inventory")
+btnIMSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(7.5) " w" Scale(100) " h" Scale(24), Lang.Get("inventory"))
 btnIMSettings.OnEvent("Click", ShowInventoryManagerSettings)
 
 ; Status indicator text (clickable)
-global imStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(45) " Background2A2A2A Border +Center", "○ OFF")
+global imStatusText := settingsGui.Add("Text", "x+" Scale(3) " w" Scale(53) " Background2A2A2A Border +Center", Lang.Get("status_off"))
 imStatusText.OnEvent("Click", ToggleInventoryManagerFunc)
 
 ; Weapon Quick Switch
-btnQSSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), "Quick Swap")
+btnQSSettings := settingsGui.Add("Button", "x" Scale(35) " y+" Scale(10) " w" Scale(100) " h" Scale(24), Lang.Get("quick_swap"))
 btnQSSettings.OnEvent("Click", ShowWeaponQuickSwitchSettings)
 
 ; Status indicator text (clickable)
-global qsStatusText := settingsGui.Add("Text", "x+" Scale(5) " w" Scale(45) " Background2A2A2A Border +Center", "○ OFF")
+global qsStatusText := settingsGui.Add("Text", "x+" Scale(3) " w" Scale(53) " Background2A2A2A Border +Center", Lang.Get("status_off"))
 qsStatusText.OnEvent("Click", ToggleWeaponQuickSwitchFunc)
 
 ; Gamepad Settings - GroupBox
-settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(65) " w" Scale(190) " h" Scale(280), "Gamepad")
+settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(65) " w" Scale(190) " h" Scale(280), Lang.Get("gamepad"))
 
 ; Enable Gamepad checkbox
-settingsGui.Add("Text", "x" Scale(215) " y" Scale(90) " w" Scale(110), "Enable Gamepad:")
+settingsGui.Add("Text", "x" Scale(215) " y" Scale(90), Lang.Get("enable_gamepad"))
 global gamepadEnabledCheckbox := settingsGui.Add("CheckBox", "x+" Scale(5) " yp vGamepadEnabled")
 gamepadEnabledCheckbox.Value := GamepadEnabled
 gamepadEnabledCheckbox.OnEvent("Click", ToggleGamepadEnabled)
 
 ; Controller Type dropdown
-settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), "Controller Type:")
+settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), Lang.Get("controller_type"))
 global gamepadTypeDDL := settingsGui.Add("DropDownList", "x" Scale(215) " y+" Scale(5) " w" Scale(100) " Background2f2f2f", ["Xbox", "PlayStation"])
 gamepadTypeDDL.Choose(GamepadType = "PlayStation" ? 2 : 1)
 gamepadTypeDDL.OnEvent("Change", UpdateGamepadType)
 
 ; Menu Button dropdown with input field
-settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), "Menu Button:")
+settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), Lang.Get("menu_button"))
 ; Build button list with [Input] at the beginning
 global gamepadButtonChoiceList := ["[Input]"]
 for btn in GamepadButtonNames[GamepadType]
@@ -650,18 +666,18 @@ global gamepadCaptureBtn := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scal
 gamepadCaptureBtn.OnEvent("Click", ShowGamepadCapturePopup)
 
 ; Navigation Stick dropdown
-settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), "Navigation Stick:")
-global gamepadNavigationStickDDL := settingsGui.Add("DropDownList", "x" Scale(215) " y+" Scale(5) " w" Scale(100) " Background2f2f2f", ["Right Stick", "Left Stick", "D-Pad"])
+settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), Lang.Get("navigation_stick"))
+global gamepadNavigationStickDDL := settingsGui.Add("DropDownList", "x" Scale(215) " y+" Scale(5) " w" Scale(100) " Background2f2f2f", [Lang.Get("right_stick"), Lang.Get("left_stick"), Lang.Get("dpad")])
 gamepadNavigationStickDDL.Choose(GamepadNavigationStick = "Right" ? 1 : (GamepadNavigationStick = "Left" ? 2 : 3))
 gamepadNavigationStickDDL.OnEvent("Change", UpdateGamepadNavigationStick)
 
 ; Gamepad Status
-settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), "Status:")
-global gamepadStatusText := settingsGui.Add("Text", "x" Scale(215) " y+" Scale(5) " w" Scale(170), "○ Disabled")
+settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), Lang.Get("status"))
+global gamepadStatusText := settingsGui.Add("Text", "x" Scale(215) " y+" Scale(5) " w" Scale(170), Lang.Get("disabled"))
 
 ; OCR settings
-settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(350) " w" Scale(190) " h" Scale(315), "OCR")
-settingsGui.Add("Text", "x" Scale(215) " y" Scale(375) " w" Scale(110), "OCR Hotkey:")
+settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(350) " w" Scale(190) " h" Scale(315), Lang.Get("ocr"))
+settingsGui.Add("Text", "x" Scale(215) " y" Scale(375) " w" Scale(110), Lang.Get("ocr_hotkey"))
 global ocrHotkeyInput := HotkeyInput(settingsGui, 215, 0, "", {value: OCRHotkey, wildcard: OCRHotkeyWildcard, hasWildcard: true, onChanged: OnOCRHotkeyChange, onWildcardChanged: OnOCRHotkeyWildcardChange, excludeKeys: ["WheelUp", "WheelDown"]})
 global ocrGamepadCaptureBtn := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(24) " h" Scale(24), "🎮")
 ocrGamepadCaptureBtn.OnEvent("Click", ShowOCRGamepadCapturePopup)
@@ -670,12 +686,12 @@ global ocrHoldEdit := settingsGui.Add("Edit", "x" Scale(215) " y+" Scale(8) " w"
 ocrHoldEdit.OnEvent("Change", UpdateOCRHoldMs)
 ocrHoldEdit.Enabled := OCRUseHold
 
-settingsGui.Add("Text", "x+" Scale(5) " yp w" Scale(40), "Hold(ms)")
-global ocrHoldCheckbox := settingsGui.Add("CheckBox", "x+" Scale(5) " yp vOCRUseHold")
+settingsGui.Add("Text", "x+" Scale(5) " yp w" Scale(40), Lang.Get("hold_ms"))
+global ocrHoldCheckbox := settingsGui.Add("CheckBox", "x+" Scale(3) " yp vOCRUseHold")
 ocrHoldCheckbox.Value := OCRUseHold
 ocrHoldCheckbox.OnEvent("Click", UpdateOCRUseHold)
 
-settingsGui.Add("Text", "x" Scale(215) " y+" Scale(15) " w" Scale(170), "Scrambler Bypass:")
+settingsGui.Add("Text", "x" Scale(215) " y+" Scale(15) " w" Scale(170), Lang.Get("scrambler_bypass"))
 global ocrBypassHotkeyInput := HotkeyInput(settingsGui, 215, 0, "", {value: OCRBypassToggleHotkey, wildcard: OCRBypassToggleHotkeyWildcard, hasWildcard: true, onChanged: OnOCRBypassHotkeyChange, onWildcardChanged: OnOCRBypassHotkeyWildcardChange, excludeKeys: ["WheelUp", "WheelDown"]})
 
 global bypassGamepadCaptureBtn := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(24) " h" Scale(24), "🎮")
@@ -685,12 +701,12 @@ global bypassHoldEdit := settingsGui.Add("Edit", "x" Scale(215) " y+" Scale(8) "
 bypassHoldEdit.OnEvent("Change", UpdateBypassHoldMs)
 bypassHoldEdit.Enabled := BypassUseHold
 
-settingsGui.Add("Text", "x+" Scale(5) " yp w" Scale(40), "Hold(ms)")
-global bypassHoldCheckbox := settingsGui.Add("CheckBox", "x+" Scale(5) " yp vBypassUseHold")
+settingsGui.Add("Text", "x+" Scale(5) " yp w" Scale(40), Lang.Get("hold_ms"))
+global bypassHoldCheckbox := settingsGui.Add("CheckBox", "x+" Scale(3) " yp vBypassUseHold")
 bypassHoldCheckbox.Value := BypassUseHold
 bypassHoldCheckbox.OnEvent("Click", UpdateBypassUseHold)
 
-btnOCRSettings := settingsGui.Add("Button", "x" Scale(215) " y+" Scale(20) " w" Scale(170) " h" Scale(28), "OCR Settings")
+btnOCRSettings := settingsGui.Add("Button", "x" Scale(215) " y+" Scale(20) " w" Scale(170) " h" Scale(28), Lang.Get("ocr_settings"))
 btnOCRSettings.OnEvent("Click", (*) => OCR_ShowSettingsWindow())
 
 mainTab.UseTab()
@@ -725,14 +741,14 @@ if (GamepadEnabled) {
 
 ; Tray Menu
 A_TrayMenu.Delete()
-A_TrayMenu.Add("Show", (*) => (DllCall("IsWindowVisible", "Ptr", settingsGui.Hwnd) ? settingsGui.Hide() : settingsGui.Show()))
-A_TrayMenu.Add("Suspend", (*) => ToggleSuspend())
-A_TrayMenu.Add("Reload", (*) => Reload())
-A_TrayMenu.Add("Exit", (*) => ExitApp())
-A_TrayMenu.Default := "Show"
+A_TrayMenu.Add(Lang.Get("tray_show"), (*) => (DllCall("IsWindowVisible", "Ptr", settingsGui.Hwnd) ? settingsGui.Hide() : settingsGui.Show()))
+A_TrayMenu.Add(Lang.Get("tray_suspend"), (*) => ToggleSuspend())
+A_TrayMenu.Add(Lang.Get("tray_reload"), (*) => Reload())
+A_TrayMenu.Add(Lang.Get("tray_exit"), (*) => ExitApp())
+A_TrayMenu.Default := Lang.Get("tray_show")
 
 ; Selection Popup
-selectionGui := Gui("-Caption +LastFound", "Select Stratagem")
+selectionGui := Gui("-Caption +LastFound", Lang.Get("select_stratagem"))
 selectionGui.BackColor := "202020"
 selBaseFontSize := Scale(10)
 selectionGui.SetFont("s" selBaseFontSize " cC4C4C4", "Segoe UI")
@@ -744,31 +760,37 @@ selectionGui.OnEvent("Escape", CloseSelectionGui)
 ; Custom Title Bar for Selection GUI
 selTitleFontSize := Scale(12)
 selectionGui.SetFont("cFFFFFF s" selTitleFontSize)
-selectionGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(30) " Background2A2A2A Border +Center", "Select Stratagem").OnEvent("Click", StartMoveSel)
+selectionGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(30) " Background2A2A2A Border +Center", Lang.Get("select_stratagem")).OnEvent("Click", StartMoveSel)
 selectionGui.Add("Button", "x+5 y0 w" Scale(30) " h" Scale(30), "X").OnEvent("Click", CloseSelectionGui)
 selectionGui.SetFont("s" selBaseFontSize " cC4C4C4")
 
-selectionGui.Add("Text", "x" Scale(10) " y" Scale(40) " w" Scale(200), "Search:")
+selectionGui.Add("Text", "x" Scale(10) " y" Scale(40) " w" Scale(200), Lang.Get("search"))
 searchEdit := selectionGui.Add("Edit", "w" Scale(265) " h" Scale(25) " x" Scale(10) " y+" Scale(5) " vSearchBox Background2f2f2f")
 searchEdit.OnEvent("Change", FilterAvailableList)
 
 btnFavorites := selectionGui.Add("Button", "w" Scale(30) " h" Scale(25) " x+" Scale(5) " yp", "★")
 btnFavorites.OnEvent("Click", ToggleFavoritesFilter)
 
-lbAvailable := selectionGui.Add("ListView", "x" Scale(10) " y+" Scale(10) " r16 w" Scale(300) " Multi vAvailableList Background000000", ["Icon", "Name", "ID", "Type", "★"])
+lbAvailable := selectionGui.Add("ListView", "x" Scale(10) " y+" Scale(10) " r16 w" Scale(300) " Multi vAvailableList Background000000", [Lang.Get("icon"), Lang.Get("name"), "ID", "Type", Lang.Get("favorites")])
 lbAvailable.SetImageList(IL_ID, 1)
-lbAvailable.ModifyCol(1, iconSizeScaled + Scale(8))   ; Icon column - with scaled size
-lbAvailable.ModifyCol(2, Scale(200))  ; Name column
+; Icon column - Auto-sizing depends on the translated header text
+iconAvail := Max(iconSizeScaled + Scale(6), StrLen(Lang.Get("icon")) * Scale(8) + Scale(10))
+; Favorites column pinned right
+favAvail := Max(Scale(25), StrLen(Lang.Get("favorites")) * Scale(8) + Scale(4))
+; Name column fills the remaining width
+nameAvail := Max(Scale(60), Scale(275) - iconAvail - favAvail)
+lbAvailable.ModifyCol(1, iconAvail)
+lbAvailable.ModifyCol(2, nameAvail)
 lbAvailable.ModifyCol(3, 0)    ; ID (hidden)
 lbAvailable.ModifyCol(4, 0)    ; Type (hidden)
-lbAvailable.ModifyCol(5, Scale(25))   ; Fav column
+lbAvailable.ModifyCol(5, favAvail)
 lbAvailable.OnEvent("DoubleClick", ToggleFavorite)
 PopulateAvailableList()
 
-btnAddSel := selectionGui.Add("Button", "w" Scale(300) " x" Scale(10) " y+" Scale(10), "Add Selected")
+btnAddSel := selectionGui.Add("Button", "w" Scale(300) " x" Scale(10) " y+" Scale(10), Lang.Get("add_selected"))
 btnAddSel.OnEvent("Click", AddSelected)
 
-selectionGui.Add("Text", "w" Scale(300) " x" Scale(10) " y+" Scale(5) " cYellow Center", "Double-click a stratagem to mark it as favorite (★)")
+selectionGui.Add("Text", "w" Scale(300) " x" Scale(10) " y+" Scale(5) " cYellow Center", Lang.Get("double_click_favorite"))
 
 ; --- Tab Focus Clear Function ---
 ClearTabFocus(*) {
@@ -785,7 +807,7 @@ ShowSelectionGui() {
     
     ; Reset keybind mode flag for Radial Menu
     isKeybindSelectionMode := false
-    btnAddSel.Text := "Add Selected"
+    btnAddSel.Text := Lang.Get("add_selected")
     
     searchEdit.Value := ""
     ; Reset favorites filter when opening selection popup
@@ -905,11 +927,39 @@ ClearBitmapCache() {
 UpdateActiveList(selectIdx := 0) {
     lbActive.Delete()
     lbActive.Opt("-Redraw")
+    
+    ; Auto-size columns based on longest text in current language (headers + cell content)
+    maxNameLen := StrLen(Lang.Get("name"))
+    maxCatLen := StrLen(Lang.Get("category"))
+    for id in ActiveStratagems {
+        name := StratagemNames.Has(id) ? StratagemNames[id] : id
+        if (StrLen(name) > maxNameLen)
+            maxNameLen := StrLen(name)
+        
+        category := StratagemSections.Has(id) ? StratagemSections[id] : ""
+        category := StrReplace(category, " Stratagems", "")
+        category := StrReplace(category, "Стратагемы ", "")
+        if (StrLen(category) > maxCatLen)
+            maxCatLen := StrLen(category)
+    }
+    
+    ; Category column must fit both the longest cell text and the translated header text
+    catColWidth := Max(Scale(60), StrLen(Lang.Get("category")) * Scale(8) + Scale(10), maxCatLen * Scale(8) + Scale(10))
+    ; Icon column must fit both the icon and the translated header text
+    iconColWidth := Max(iconSizeScaled + Scale(6), StrLen(Lang.Get("icon")) * Scale(8) + Scale(10))
+    ; Name column fills the remaining width so the category stays pinned right
+    nameColWidth := Max(Scale(100), Scale(360) - iconColWidth - catColWidth)
+    
+    lbActive.ModifyCol(1, iconColWidth)
+    lbActive.ModifyCol(2, nameColWidth)
+    lbActive.ModifyCol(3, catColWidth)
+    
     for id in ActiveStratagems {
         idx := (IconIndexMap.Has(id) && IconIndexMap[id] > 0) ? IconIndexMap[id] : 1
         category := StratagemSections.Has(id) ? StratagemSections[id] : ""
-        ; Remove " Stratagems" suffix from category name for cleaner display
+        ; Remove " Stratagems" suffix or "Стратагемы " prefix from category name for cleaner display
         category := StrReplace(category, " Stratagems", "")
+        category := StrReplace(category, "Стратагемы ", "")
         lbActive.Add("Icon" . idx, "", StratagemNames[id], category)
     }
     lbActive.Opt("+Redraw")
@@ -1119,7 +1169,7 @@ LoadSettings() {
         TextSize := Integer(IniRead(IniPath, "Radial_Menu", "TextSize", "9"))
         ShowText := IniRead(IniPath, "Radial_Menu", "ShowText", "1") = "1" ? true : false
         RadialMenuKey := IniRead(IniPath, "Radial_Menu", "RadialMenuKey", "MButton")
-        RadialMenuKeyWildcard := IniRead(IniPath, "Radial_Menu", "RadialMenuKeyWildcard", "0") = "1" ? true : false
+        RadialMenuKeyWildcard := IniRead(IniPath, "Radial_Menu", "RadialMenuKeyWildcard", "1") = "1" ? true : false
         RadialMenuKeyMode := IniRead(IniPath, "Radial_Menu", "RadialMenuKeyMode", "Hold")
         
         ; Load GUI Scale
@@ -1279,7 +1329,7 @@ SwitchProfile(profileType := "radial", newProfile := "", forceReload := false) {
         SetProfileDDL("keybind")
         
         ; Show tooltip notification
-        ToolTip("Keybind Profile: " . ActiveKeybindProfile, A_ScreenWidth - 200, A_ScreenHeight - 50)
+        ToolTip(Lang.Get("tooltip_keybind_profile") . " " . ActiveKeybindProfile, 5, 5)
         SetTimer(RemoveToolTip, -1000)
     }
     else {
@@ -1338,7 +1388,7 @@ SwitchProfile(profileType := "radial", newProfile := "", forceReload := false) {
         }
         
         ; Show tooltip notification
-        ToolTip("Profile: " . ActiveProfile, A_ScreenWidth - 200, A_ScreenHeight - 50)
+        ToolTip(Lang.Get("tooltip_profile") . " " . ActiveProfile, 5, 5)
         SetTimer(RemoveToolTip, -1000)
     }
 }
@@ -1347,10 +1397,10 @@ CreateProfile(profileType := "radial") {
     global IniPath, ProfilesIniPath, Stratagems, DefaultProfile
     
     ; Determine title based on profile type
-    title := profileType = "keybind" ? "New Keybind Profile" : "New Profile"
+    title := profileType = "keybind" ? Lang.Get("new_keybind_profile_title") : Lang.Get("new_profile_title")
     
     ; Prompt for new profile name
-    IB := InputBox("Enter a name for the new profile:", title)
+    IB := InputBox(Lang.Get("enter_profile_name"), title)
     if (IB.Result = "Cancel" || IB.Value = "")
         return
     
@@ -1385,7 +1435,7 @@ CreateProfile(profileType := "radial") {
         SetProfileDDL("keybind")
         UpdateKeybindsList()
         
-        MsgBox("Created keybind profile: " . ActiveKeybindProfile, "Profile Created", 0x40)
+        MsgBox(Lang.Get("keybind_profile_create_success") . " " . ActiveKeybindProfile, Lang.Get("profile_created_title"), 0x40)
     }
     else {
         global ActiveProfile, ActiveStratagems, ProfileDDL
@@ -1423,11 +1473,11 @@ DeleteProfile(profileType := "radial") {
         global ActiveKeybindProfile, ActiveKeybindStratagems, StratagemKeybinds, keybindProfileDDL
         
         if (ActiveKeybindProfile = DefaultProfile) {
-            MsgBox("Cannot delete the Default profile!", "Error", 0x10)
+            MsgBox(Lang.Get("cannot_delete_default"), Lang.Get("error_title"), 0x10)
             return
         }
         
-        result := MsgBox("Delete keybind profile '" . ActiveKeybindProfile . "'?", "Confirm Delete", 0x24)
+        result := MsgBox(Lang.Get("delete_profile_confirm") . ActiveKeybindProfile . "'?", Lang.Get("confirm_delete"), 0x24)
         if (result = "No")
             return
         
@@ -1478,18 +1528,18 @@ DeleteProfile(profileType := "radial") {
         SetProfileDDL("keybind")
         UpdateKeybindsList()
         
-        MsgBox("Keybind profile deleted. Switched to: " . ActiveKeybindProfile, "Profile Deleted", 0x40)
+        MsgBox(Lang.Get("keybind_profile_delete_success") . " " . ActiveKeybindProfile, Lang.Get("profile_deleted_title"), 0x40)
     }
     else {
         global ActiveProfile, ActiveStratagems, ProfileDDL
         
         if (ActiveProfile = DefaultProfile) {
-            MsgBox("Cannot delete the Default profile!", "Error", 0x10)
+            MsgBox(Lang.Get("cannot_delete_default"), Lang.Get("error_title"), 0x10)
             return
         }
         
         ; Confirm deletion
-        result := MsgBox("Delete profile '" . ActiveProfile . "'?", "Confirm Delete", 0x24)
+        result := MsgBox(Lang.Get("delete_profile_confirm") . ActiveProfile . "'?", Lang.Get("confirm_delete"), 0x24)
         if (result = "No")
             return
         
@@ -1525,7 +1575,7 @@ DeleteProfile(profileType := "radial") {
         SetProfileDDL("radial")
         UpdateActiveList()
         
-        MsgBox("Profile deleted. Switched to: " . ActiveProfile, "Profile Deleted", 0x40)
+        MsgBox(Lang.Get("profile_delete_success") . " " . ActiveProfile, Lang.Get("profile_deleted_title"), 0x40)
     }
 }
 
@@ -1684,23 +1734,23 @@ ShowCustomKeysPopup() {
     global CustomUpKey, CustomDownKey, CustomLeftKey, CustomRightKey
     
     SwitchToEnglishLayout()
-    customKeysGui := Gui("+Owner" . settingsGui.Hwnd, "Custom Keys")
+    customKeysGui := Gui("+Owner" . settingsGui.Hwnd, Lang.Get("custom_keys"))
     customKeysGui.SetFont("s10", "Segoe UI")
     
-    customKeysGui.Add("Text", "x30 y20 w70", "Up Key:")
+    customKeysGui.Add("Text", "x30 y20 w70", Lang.Get("up_key"))
     customUpInput := customKeysGui.Add("Hotkey", "w100 x+10 yp", CustomUpKey)
     
-    customKeysGui.Add("Text", "x30 y+15 w70", "Down Key:")
+    customKeysGui.Add("Text", "x30 y+15 w70", Lang.Get("down_key"))
     customDownInput := customKeysGui.Add("Hotkey", "w100 x+10 yp", CustomDownKey)
     
-    customKeysGui.Add("Text", "x30 y+15 w70", "Left Key:")
+    customKeysGui.Add("Text", "x30 y+15 w70", Lang.Get("left_key"))
     customLeftInput := customKeysGui.Add("Hotkey", "w100 x+10 yp", CustomLeftKey)
     
-    customKeysGui.Add("Text", "x30 y+15 w70", "Right Key:")
+    customKeysGui.Add("Text", "x30 y+15 w70", Lang.Get("right_key"))
     customRightInput := customKeysGui.Add("Hotkey", "w100 x+10 yp", CustomRightKey)
     
-    customKeysGui.Add("Button", "w85 h30 x30 y+20", "Save").OnEvent("Click", (*) => SaveCustomKeys(customUpInput, customDownInput, customLeftInput, customRightInput, customKeysGui))
-    customKeysGui.Add("Button", "w85 h30 x+10 yp", "Cancel").OnEvent("Click", (*) => customKeysGui.Hide())
+    customKeysGui.Add("Button", "w85 h30 x30 y+20", Lang.Get("save")).OnEvent("Click", (*) => SaveCustomKeys(customUpInput, customDownInput, customLeftInput, customRightInput, customKeysGui))
+    customKeysGui.Add("Button", "w85 h30 x+10 yp", Lang.Get("cancel")).OnEvent("Click", (*) => customKeysGui.Hide())
     
     customKeysGui.Show("w245")
 }
@@ -1757,22 +1807,22 @@ UpdateDisplayToggleHotkey(*) {
 
 UpdateHelpText() {
     global helpText1, RadialMenuKey, DisplayToggleHotkey
-    radialKey := RadialMenuKey != "" ? RadialMenuKey : "Not Set"
-    toggleKey := DisplayToggleHotkey != "" ? DisplayToggleHotkey : "Not Set"
-    helpText1.Value := radialKey " - Radial Menu Key | " toggleKey " - Show/Hide GUI"
+    radialKey := RadialMenuKey != "" ? RadialMenuKey : Lang.Get("not_set")
+    toggleKey := DisplayToggleHotkey != "" ? DisplayToggleHotkey : Lang.Get("not_set")
+    helpText1.Value := radialKey " - " Lang.Get("radial_menu_key_help") " | " toggleKey " - " Lang.Get("show_hide_gui_help")
 }
 
 UpdateHelpText2() {
     global helpText2, KeybindListHotkey
-    listKey := KeybindListHotkey != "" ? KeybindListHotkey : "Not Set"
-    helpText2.Value := listKey " - Floating List Overlay (Hold to drag)"
+    listKey := KeybindListHotkey != "" ? KeybindListHotkey : Lang.Get("not_set")
+    helpText2.Value := listKey " - " Lang.Get("floating_list_help")
 }
 
 UpdateHelpTextOCR() {
     global helpTextOCR, OCRHotkey, OCRBypassToggleHotkey
-    ocrKey := OCRHotkey != "" ? OCRHotkey : "Not Set"
-    bypassKey := OCRBypassToggleHotkey != "" ? OCRBypassToggleHotkey : "Not Set"
-    helpTextOCR.Value := ocrKey " - OCR Stratagem Scan | " bypassKey " - Scrambler Bypass Toggle"
+    ocrKey := OCRHotkey != "" ? OCRHotkey : Lang.Get("not_set")
+    bypassKey := OCRBypassToggleHotkey != "" ? OCRBypassToggleHotkey : Lang.Get("not_set")
+    helpTextOCR.Value := ocrKey " - " Lang.Get("ocr_scan_help") " | " bypassKey " - " Lang.Get("scrambler_bypass_help")
 }
 
 UpdateMenuSize(*) {
@@ -2097,7 +2147,7 @@ RadialMenuDown(*) {
                 SendInput("{RButton up}")
                 scramblerDidSwap := false
             }
-            ToolTip("Scrambler: No stratagems detected!", A_ScreenWidth - 200, A_ScreenHeight - 50)
+            ToolTip(Lang.Get("tooltip_scrambler_no_stratagems"), 5, 5)
             SetTimer(RemoveToolTip, -2000)
             return
         }
@@ -2111,7 +2161,7 @@ RadialMenuDown(*) {
     displayCount := OCRScramblerBypassEnabled ? Icon_GetCapturedCount() : ActiveStratagems.Length
 
     if (displayCount = 0) {
-        ToolTip("No stratagems in active profile!", A_ScreenWidth - 200, A_ScreenHeight - 50)
+        ToolTip(Lang.Get("tooltip_no_stratagems_profile"), 5, 5)
         SetTimer(RemoveToolTip, -2000)
         if (OCRScramblerBypassEnabled) {
             global ScramblerRadialMode
@@ -2276,7 +2326,7 @@ RunScramblerMacro(slot) {
         }
 
         if !IsObject(sequence) || sequence.Length = 0 {
-            ToolTip("Scrambler: No sequence for slot " slot, A_ScreenWidth - 260, A_ScreenHeight - 50)
+            ToolTip(Lang.Get("tooltip_scrambler_no_sequence_slot") . " " . slot, 5, 5)
             SetTimer(RemoveToolTip, -1200)
             return
         }
@@ -2381,7 +2431,7 @@ ToggleOCRScramblerBypass(*) {
     OCRScramblerBypassEnabled := !OCRScramblerBypassEnabled
     ScramblerSuppressDebug := OCRScramblerBypassEnabled
     SaveSettings()
-    ToolTip("OCR Scrambler Bypass: " (OCRScramblerBypassEnabled ? "ON" : "OFF"), A_ScreenWidth - 260, A_ScreenHeight - 50)
+    ToolTip(Lang.Get("tooltip_ocr_scrambler_bypass") . " " (OCRScramblerBypassEnabled ? Lang.Get("on") : Lang.Get("off")), 5, 5)
     SetTimer(RemoveToolTip, -1200)
 }
 
@@ -2423,7 +2473,7 @@ OCRAnalyzeAndSwitchProfile(*) {
     }
 
     if (detectedCount <= 0) {
-        ToolTip("OCR: no stratagems found", A_ScreenWidth - 240, A_ScreenHeight - 50)
+        ToolTip(Lang.Get("tooltip_ocr_no_stratagems"), 5, 5)
         SetTimer(RemoveToolTip, -1500)
         return
     }
@@ -2435,7 +2485,7 @@ OCRAnalyzeAndSwitchProfile(*) {
 
     ; Force reload so repeated OCR scans refresh the same OCR profile too
     SwitchProfile("radial", "OCR", true)
-    ToolTip("OCR profile loaded: " detectedCount, A_ScreenWidth - 240, A_ScreenHeight - 50)
+    ToolTip(Lang.Get("tooltip_ocr_profile_loaded") . " " . detectedCount, 5, 5)
     SetTimer(RemoveToolTip, -1500)
 }
 
@@ -2943,8 +2993,28 @@ ResolveBypassSequence(id) {
     return OCR_GetDirectionsByRow(row)
 }
 
+; Execute Power Throw weapon assistant action
+ExecutePowerThrow(*) {
+    global WP_ThrowDelay, WP_InteractKey
+    
+    ; Power Throw sequence: LMB click, delay, Interact key press
+    Send("{LButton down}")
+    Sleep 25
+    Send("{LButton up}")
+    Sleep WP_ThrowDelay
+    Send("{" WP_InteractKey " down}")
+    Sleep 25
+    Send("{" WP_InteractKey " up}")
+}
+
 RunMacro(id) {
     global IsExecutingMacro, StratagemMenuKey, MenuInputType, PostMenuDelay, OCRScramblerBypassEnabled
+    
+    ; Special case: Power Throw stratagem
+    if (id = "power_throw") {
+        ExecutePowerThrow()
+        return
+    }
     
     if !Stratagems.Has(id) 
         return
@@ -2966,7 +3036,7 @@ RunMacro(id) {
         if (id = "ocr_objective") {
             sequence := ResolveExecutionSequence(id)
             if !IsObject(sequence) || sequence.Length = 0 {
-                ToolTip("OCR objective: can't read sequence", A_ScreenWidth - 280, A_ScreenHeight - 50)
+                ToolTip(Lang.Get("tooltip_ocr_objective_cant_read"), 5, 5)
                 SetTimer(RemoveToolTip, -1200)
                 return
             }
@@ -2993,7 +3063,7 @@ RunMacro(id) {
             Sleep(PostMenuDelay)
             sequence := ResolveBypassSequence(id)
             if !IsObject(sequence) || sequence.Length = 0 {
-                ToolTip("OCR bypass: can't read sequence", A_ScreenWidth - 260, A_ScreenHeight - 50)
+                ToolTip(Lang.Get("tooltip_ocr_bypass_cant_read"), 5, 5)
                 SetTimer(RemoveToolTip, -1200)
                 return
             }
@@ -3135,6 +3205,25 @@ ToggleAutoLanguageSwitch(*) {
     IniWrite(AutoLanguageSwitch ? "1" : "0", IniPath, "Settings", "AutoLanguageSwitch")
 }
 
+; Switch GUI language and reload script
+SwitchLanguage() {
+    global langDDL, CurrentLanguage, IniPath
+    
+    ; Get selected language from dropdown
+    selectedLang := (langDDL.Value = 2) ? "ru" : "en"
+    
+    ; Only reload if language actually changed
+    if (selectedLang = CurrentLanguage)
+        return
+    
+    ; Save new language setting
+    CurrentLanguage := selectedLang
+    SaveLanguage()
+    
+    ; Reload script to apply new language
+    Reload()
+}
+
 UpdateAutoLanguageLayout(*) {
     global AutoLanguageLayout, autoLangLayoutDDL, EnglishLayoutCodes
     selectedIdx := autoLangLayoutDDL.Value
@@ -3207,7 +3296,7 @@ GameCheck() {
         ; Game process doesn't exist - start 3 second countdown
         Loop 3 {
             remaining := 3 - A_Index + 1
-            ToolTip("Game closed. Exiting in " . remaining . "...", A_ScreenWidth - 200, A_ScreenHeight - 50)
+            ToolTip(Lang.Get("tooltip_game_closing") . " " . remaining . "...", 5, 5)
             Sleep(1000)
             ; Check if countdown was cancelled (turned off auto-close)
             if !AutoCloseCountdownActive {
@@ -3246,21 +3335,21 @@ UpdateStatusIndicator() {
         ; Manually suspended - RED
         StatusText.Opt("cFF0000")  ; Red
         StatusText.Value := "●"
-        status := "Suspended"
+        status := Lang.Get("status_suspended")
     } else if (IsAutoPaused) {
         ; Auto-paused - YELLOW
         StatusText.Opt("cFFFF00")  ; Yellow
         StatusText.Value := "●"
-        status := "AutoPaused"
+        status := Lang.Get("status_autopause")
     } else {
         ; Working normally - GREEN
         StatusText.Opt("c00FF00")  ; Green
         StatusText.Value := "●"
-        status := "Active"
+        status := Lang.Get("status_active")
     }
     
     ; Handle Keybind List visibility based on status
-    if (status = "Active") {
+    if (!A_IsSuspended && !IsAutoPaused) {
         ; Returning to Active - show list if it was visible before suspend
         if (KeybindListWasVisibleBeforeSuspend) {
             ShowKeybindList()
@@ -3277,7 +3366,7 @@ UpdateStatusIndicator() {
     }
     
     ; Show tooltip with current status
-    ToolTip("Status: " . status, A_ScreenWidth - 200, A_ScreenHeight - 50)
+    ToolTip(Lang.Get("tooltip_status") . " " . status, 5, 5)
     SetTimer(RemoveToolTip, -1500)
 }
 
@@ -3509,7 +3598,7 @@ ShowKeybindSelectionGui(*) {
     PopulateAvailableList()
     
     ; Change button text (handler stays AddSelected which checks the flag)
-    btnAddSel.Text := "Add to Keybinds"
+    btnAddSel.Text := Lang.Get("add_to_keybinds")
     
     selectionGui.Show()
     Hotkey("~^a", SelectAllAvailable, "On S")
@@ -3678,6 +3767,31 @@ UpdateKeybindsList(selectIdx := 0) {
     lbKeybinds.Delete()
     lbKeybinds.Opt("-Redraw")
     
+    ; Auto-size columns based on longest text in current language (headers + cell content)
+    maxNameLen := StrLen(Lang.Get("name"))
+    maxHotkeyLen := StrLen(Lang.Get("hotkey"))
+    for id in ActiveKeybindStratagems {
+        name := StratagemNames.Has(id) ? StratagemNames[id] : id
+        if (StrLen(name) > maxNameLen)
+            maxNameLen := StrLen(name)
+        
+        hotkey := StratagemKeybinds.Has(id) ? StrUpper(GetShortHotkeyDisplay(StratagemKeybinds[id])) : ""
+        if (StrLen(hotkey) > maxHotkeyLen)
+            maxHotkeyLen := StrLen(hotkey)
+    }
+    
+    ; Hotkey column must fit both the longest hotkey and the translated header text
+    hotkeyColWidth := Max(Scale(60), StrLen(Lang.Get("hotkey")) * Scale(8) + Scale(10), maxHotkeyLen * Scale(8) + Scale(10))
+    ; Icon column must fit both the icon and the translated header text
+    iconColWidth := Max(iconSizeScaled + Scale(6), StrLen(Lang.Get("icon")) * Scale(8) + Scale(10))
+    ; Name column fills the remaining width so the hotkey/visibility stay pinned right
+    nameColWidth := Max(Scale(100), Scale(360) - iconColWidth - hotkeyColWidth - Scale(30))
+    
+    lbKeybinds.ModifyCol(1, iconColWidth)
+    lbKeybinds.ModifyCol(2, nameColWidth)
+    lbKeybinds.ModifyCol(3, hotkeyColWidth)
+    lbKeybinds.ModifyCol(4, Scale(30))
+    
     for id in ActiveKeybindStratagems {
         name := StratagemNames.Has(id) ? StratagemNames[id] : id
         hotkey := StratagemKeybinds.Has(id) ? StratagemKeybinds[id] : ""
@@ -3685,7 +3799,7 @@ UpdateKeybindsList(selectIdx := 0) {
         eye := KeybindListVisibility.Has(id) ? "" : "👁"
         
         idx := (IconIndexMap.Has(id) && IconIndexMap[id] > 0) ? IconIndexMap[id] : 1
-        lbKeybinds.Add("Icon" . idx, "", name, StrUpper(hotkey), eye)
+        lbKeybinds.Add("Icon" . idx, "", name, StrUpper(GetShortHotkeyDisplay(hotkey)), eye)
     }
     
     lbKeybinds.Opt("+Redraw")
@@ -3707,7 +3821,7 @@ ShowKeybindCapture(*) {
     
     row := lbKeybinds.GetNext()
     if !row {
-        MsgBox("Please select a stratagem.")
+        MsgBox(Lang.Get("no_stratagem_selected"))
         return
     }
     
@@ -3717,8 +3831,14 @@ ShowKeybindCapture(*) {
     stratID := ActiveKeybindStratagems[row]
     name := StratagemNames.Has(stratID) ? StratagemNames[stratID] : stratID
     
+    ; Destroy any existing "Set Hotkey" window before creating a new one
+    setHotkeyTitle := Lang.Get("set_hotkey")
+    if WinExist(setHotkeyTitle) {
+        try WinClose(setHotkeyTitle)
+    }
+    
     ; Create capture dialog
-    captureGui := Gui("-Caption +LastFound", "Set Hotkey")
+    captureGui := Gui("-Caption +LastFound", setHotkeyTitle)
     captureGui.BackColor := "202020"
     captureGui.SetFont("s10 cC4C4C4", "Segoe UI")
     captureGui.MarginX := Scale(5)
@@ -3726,18 +3846,18 @@ ShowKeybindCapture(*) {
     
     ; Title bar
     captureGui.SetFont("cFFFFFF s12")
-    captureGui.Add("Text", "x0 y0 w" Scale(245) " h" Scale(26) " Background2A2A2A Border +Center", "Set Hotkey").OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    captureGui.Add("Text", "x0 y0 w" Scale(245) " h" Scale(26) " Background2A2A2A Border +Center", Lang.Get("set_hotkey")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     captureGui.Add("Button", "x+5 y0 w" Scale(26) " h" Scale(26), "X").OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.SetFont("s12 cC4C4C4")
     
-    captureGui.Add("Text", "x" Scale(10) " y" Scale(36) " w" Scale(260) " Center", "Press a key for:")
+    captureGui.Add("Text", "x" Scale(10) " y" Scale(36) " w" Scale(260) " Center", Lang.Get("press_key_for"))
     captureGui.Add("Text", "x" Scale(10) " y+2 w" Scale(260) " Center cFFD700", name)
     
     currentHK := StratagemKeybinds.Has(stratID) ? StratagemKeybinds[stratID] : ""
-    captureGui.Add("Text", "x" Scale(10) " y+10 w" Scale(260) " Center cGray", "Current: " (currentHK != "" ? currentHK : "None"))
+    captureGui.Add("Text", "x" Scale(10) " y+10 w" Scale(260) " Center cGray", Lang.Get("current") ": " (currentHK != "" ? currentHK : "None"))
     
     ; DropDownList for alternative keys with wildcard checkbox
-    hkChoiceDDL := captureGui.Add("DropDownList", "x" Scale(80) " y+12 w" Scale(120) " Background2f2f2f", AltChoiceList)
+    hkChoiceDDL := captureGui.Add("DropDownList", "x" Scale(78) " y+12 w" Scale(120) " Background2f2f2f", AltChoiceList)
     hkChoiceDDL.OnEvent("Change", (*) => SyncKeybindCaptureInputs("DDL", hkChoiceDDL, hkCtrl))
     
     ; Wildcard checkbox
@@ -3752,7 +3872,7 @@ ShowKeybindCapture(*) {
     hkWildcardCb.Value := currentWildcard
     
     ; Hotkey control
-    hkCtrl := captureGui.Add("Hotkey", "w" Scale(120) " x" Scale(80) " y+10 vHotkeyInput")
+    hkCtrl := captureGui.Add("Hotkey", "w" Scale(120) " x" Scale(78) " y+10 vHotkeyInput")
     if (currentHK != "")
         hkCtrl.Value := currentHK
     SetAltChoice(currentHK, hkChoiceDDL)
@@ -3760,7 +3880,7 @@ ShowKeybindCapture(*) {
     hkCtrl.Focus()
     
     ; Save button
-    btnSave := captureGui.Add("Button", "x" Scale(100) " y+15 w" Scale(80) " h" Scale(26) " Default", "Save")
+    btnSave := captureGui.Add("Button", "x" Scale(88) " y+15 w" Scale(100) " h" Scale(26) " Default", Lang.Get("save"))
     btnSave.OnEvent("Click", (*) => SaveHotkeyFromCapture(captureGui, hkChoiceDDL, hkCtrl, stratID))
     
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
@@ -3802,7 +3922,7 @@ SaveHotkeyFromCapture(guiCtrl, hkChoiceDDL, hkCtrl, stratID) {
     ; Check if this hotkey is reserved (used in Settings or Misc tabs)
     reservedName := GetReservedHotkeyName(newHK)
     if (newHK != "" && reservedName != "") {
-        MsgBox("Cannot use this hotkey!`n`n'" . newHK . "' is already used for: " . reservedName . "`n`nPlease choose a different hotkey.", "Hotkey Reserved", 0x10)
+        MsgBox(Lang.Get("hotkey_reserved") . "`n`n'" . newHK . "' " . Lang.Get("already_used_for") . " " . reservedName . "`n`n" . Lang.Get("please_choose_different"), Lang.Get("hotkey_reserved_title"), 0x10)
         return
     }
     
@@ -3892,6 +4012,8 @@ GetReservedHotkeyName(hotkeyStr) {
     global RadialMenuKey, DisplayToggleHotkey
     global SuspendHotkey, ExitHotkey, ProfileNextHotkey, ProfilePrevHotkey
     global KeybindListHotkey, OCRHotkey, OCRBypassToggleHotkey
+    global ToggleWeaponHotkey, WeaponAssistHotkey, CycleWeaponModeHotkey, SafetyHotkey
+    global ToggleDriverHotkey
     
     if (hotkeyStr = "")
         return ""
@@ -3903,20 +4025,25 @@ GetReservedHotkeyName(hotkeyStr) {
     
     ; Check each reserved hotkey and return its description
     reservedList := [
-        [RadialMenuKey, "Radial Menu Key"],
-        [DisplayToggleHotkey, "GUI Toggle"],
-        [SuspendHotkey, "Suspend"],
-        [ExitHotkey, "Exit"],
-        [ProfileNextHotkey, "Next Profile"],
-        [ProfilePrevHotkey, "Prev Profile"],
-        [KeybindListHotkey, "Keybind List Overlay"],
-        [OCRHotkey, "OCR Scan"],
-        [OCRBypassToggleHotkey, "OCR Scrambler Bypass Toggle"]
+        [RadialMenuKey, "reserved_radial_menu_key"],
+        [DisplayToggleHotkey, "reserved_gui_toggle"],
+        [SuspendHotkey, "reserved_suspend"],
+        [ExitHotkey, "reserved_exit"],
+        [ProfileNextHotkey, "reserved_next_profile"],
+        [ProfilePrevHotkey, "reserved_prev_profile"],
+        [KeybindListHotkey, "reserved_keybind_list_overlay"],
+        [OCRHotkey, "reserved_ocr_scan"],
+        [OCRBypassToggleHotkey, "reserved_ocr_bypass_toggle"],
+        [ToggleWeaponHotkey, "reserved_weapon_assistant_toggle"],
+        [WeaponAssistHotkey, "reserved_weapon_assistant_fire"],
+        [CycleWeaponModeHotkey, "reserved_weapon_mode_cycle"],
+        [SafetyHotkey, "reserved_weapon_safety"],
+        [ToggleDriverHotkey, "reserved_driver_assistant_toggle"]
     ]
     
     for item in reservedList {
         reservedHK := item[1]
-        name := item[2]
+        nameKey := item[2]
         
         ; Normalize reserved hotkey for comparison
         normalizedReserved := reservedHK
@@ -3924,7 +4051,7 @@ GetReservedHotkeyName(hotkeyStr) {
             normalizedReserved := SubStr(normalizedReserved, 2)
         
         if (StrLower(normalizedHK) = StrLower(normalizedReserved))
-            return name
+            return Lang.Get(nameKey)
     }
     
     return ""
@@ -3989,18 +4116,46 @@ global KeybindListHoldTriggered := false
 global KeybindListWasVisibleBeforeSuspend := false
 global KeybindListExecutingFromList := false
 
+; Convert hotkey to short display format (e.g., "Numpad1" -> "Num 1", "Numpad2" -> "Num 2")
+GetShortHotkeyDisplay(hotkey) {
+    if (hotkey = "")
+        return ""
+    
+    ; Check for Numpad prefix and convert to short format
+    if (InStr(hotkey, "Numpad") = 1) {
+        suffix := SubStr(hotkey, 7)  ; Get everything after "Numpad"
+        ; Map special numpad keys to their symbols
+        if (suffix = "Add")
+            return "Num +"
+        else if (suffix = "Sub")
+            return "Num -"
+        else if (suffix = "Mult")
+            return "Num *"
+        else if (suffix = "Div")
+            return "Num /"
+        else if (suffix = "Dot")
+            return "Num ."
+        else if (suffix = "Enter")
+            return "Num Enter"
+        else
+            return "Num " . suffix
+    }
+    
+    return hotkey
+}
+
 ; --- Общая функция для обновления содержимого списка keybinds ---
 ; Возвращает объект с visibleCount, listWidth, listHeight, col1Width, col2Width, col3Width
 UpdateKeybindListContent(lbControl) {
     global ActiveKeybindStratagems, StratagemKeybinds, StratagemNames, IconIndexMap, KeybindListVisibility
     global KeybindListShowIcon, KeybindListShowHotkey, KeybindListShowName
-    global WeaponAssistantActive, DriverAssistantActive, CurrentWeaponMode, WeaponModeNames
-    global ToggleWeaponHotkey, ToggleDriverHotkey, CycleWeaponModeHotkey, DA_E_Key
+    global WeaponAssistantActive, DriverAssistantActive, CurrentWeaponMode
+    global ToggleWeaponHotkey, ToggleDriverHotkey, CycleWeaponModeHotkey, DA_Exit_Key
     
-    ; Build list of assistant status rows when active
+    ; Build list of assistant status rows when active (only if show in list is enabled)
     assistantRows := []
-    if (WeaponAssistantActive) {
-        modeName := WeaponModeNames[CurrentWeaponMode]
+    if (WeaponAssistantActive && WeaponAssistantShowInList) {
+        modeName := GetWeaponModeName(CurrentWeaponMode)
         ; Show toggle hotkey / cycle hotkey
         wpHotkey := ""
         if (ToggleWeaponHotkey != "" && CycleWeaponModeHotkey != "")
@@ -4009,18 +4164,18 @@ UpdateKeybindListContent(lbControl) {
             wpHotkey := StrUpper(ToggleWeaponHotkey)
         else if (CycleWeaponModeHotkey != "")
             wpHotkey := StrUpper(CycleWeaponModeHotkey)
-        assistantRows.Push({hotkey: wpHotkey, name: "Weapon: " modeName})
+        assistantRows.Push({hotkey: wpHotkey, name: Lang.Get("floating_weapon") . " " modeName})
     }
-    if (DriverAssistantActive) {
+    if (DriverAssistantActive && DriverAssistantShowInList) {
         ; Show toggle hotkey / exit vehicle key
         daHotkey := ""
-        if (ToggleDriverHotkey != "" && DA_E_Key != "")
-            daHotkey := StrUpper(ToggleDriverHotkey) "/" StrUpper(DA_E_Key)
+        if (ToggleDriverHotkey != "" && DA_Exit_Key != "")
+            daHotkey := StrUpper(ToggleDriverHotkey) "/" StrUpper(DA_Exit_Key)
         else if (ToggleDriverHotkey != "")
             daHotkey := StrUpper(ToggleDriverHotkey)
-        else if (DA_E_Key != "")
-            daHotkey := StrUpper(DA_E_Key)
-        assistantRows.Push({hotkey: daHotkey, name: "Driver Assistant"})
+        else if (DA_Exit_Key != "")
+            daHotkey := StrUpper(DA_Exit_Key)
+        assistantRows.Push({hotkey: daHotkey, name: Lang.Get("floating_driver")})
     }
     
     ; Calculate column widths based on visible fields
@@ -4034,7 +4189,7 @@ UpdateKeybindListContent(lbControl) {
         for id in ActiveKeybindStratagems {
             if KeybindListVisibility.Has(id)
                 continue
-            hotkey := StratagemKeybinds.Has(id) ? StrUpper(StratagemKeybinds[id]) : ""
+            hotkey := StratagemKeybinds.Has(id) ? StrUpper(GetShortHotkeyDisplay(StratagemKeybinds[id])) : ""
             if (StrLen(hotkey) > maxHotkeyLen)
                 maxHotkeyLen := StrLen(hotkey)
         }
@@ -4043,8 +4198,8 @@ UpdateKeybindListContent(lbControl) {
             if (StrLen(row.hotkey) > maxHotkeyLen)
                 maxHotkeyLen := StrLen(row.hotkey)
         }
-        ; Approximate width: ~8px per character + padding
-        col2Width := Max(Scale(40), maxHotkeyLen * Scale(8) + Scale(10))
+        ; Approximate width: ~6px per character + padding
+        col2Width := Max(Scale(50), maxHotkeyLen * Scale(6) + Scale(26))
     }
     
     ; Calculate name column width based on longest name or assistant rows
@@ -4063,8 +4218,8 @@ UpdateKeybindListContent(lbControl) {
             if (StrLen(row.name) > maxNameLen)
                 maxNameLen := StrLen(row.name)
         }
-        ; Approximate width: ~7px per character + padding
-        col3Width := Max(Scale(80), maxNameLen * Scale(7) + Scale(15))
+        ; Approximate width: ~8px per character + padding
+        col3Width := Max(Scale(100), maxNameLen * Scale(8) + Scale(0))
     }
     
     ; Total content width (sum of columns)
@@ -4096,7 +4251,7 @@ UpdateKeybindListContent(lbControl) {
         idx := (IconIndexMap.Has(id) && IconIndexMap[id] > 0) ? IconIndexMap[id] : 1
         ; Only show icon if setting is enabled
         iconOpt := KeybindListShowIcon ? "Icon" . idx : ""
-        lbControl.Add(iconOpt, "", KeybindListShowHotkey ? StrUpper(hotkey) : "", KeybindListShowName ? name : "")
+        lbControl.Add(iconOpt, "", KeybindListShowHotkey ? StrUpper(GetShortHotkeyDisplay(hotkey)) : "", KeybindListShowName ? name : "")
         visibleCount++
     }
     
@@ -4111,7 +4266,7 @@ UpdateKeybindListContent(lbControl) {
     
     ; Add "no bindings" message if list is empty
     if (visibleCount = 0) {
-        lbControl.Add("", "", "", "No bindings")
+        lbControl.Add("", "", "", Lang.Get("no_bindings"))
         ; Center the "No bindings" text by adjusting column widths
         lbControl.ModifyCol(1, 0)
         lbControl.ModifyCol(2, 0)

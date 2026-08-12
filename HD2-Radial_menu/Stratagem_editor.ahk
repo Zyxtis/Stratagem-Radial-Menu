@@ -1,8 +1,16 @@
 #Requires AutoHotkey v2.0
 #Include Config\config.ahk
 
+; Paths
+global IniPath := A_ScriptDir "\Config\settings.ini"
+global ProfilesIniPath := A_ScriptDir "\Config\profiles.ini"
+global OCRProfileIniPath := A_ScriptDir "\Config\ocr.ini"
+
 ; Load GUI Scale from settings.ini
 LoadGUIScale()
+
+; Load language settings
+LoadLanguage()
 
 OnExit(GdiShutdownRoutine)
 
@@ -18,7 +26,7 @@ LoadStratagemsData()
 IL_ID := InitIconImageList()
 
 ; --- MAIN GUI ---
-editorGui := Gui("-Caption +LastFound", "Stratagem Editor")
+editorGui := Gui("-Caption +LastFound", Lang.Get("editor_title"))
 editorGui.BackColor := ThemeBackColor
 baseFontSize := Scale(10)
 editorGui.SetFont("s" baseFontSize " c" ThemeTextColor, "Segoe UI")
@@ -28,18 +36,18 @@ editorGui.MarginY := Scale(5)
 ; Title Bar
 titleFontSize := Scale(12)
 editorGui.SetFont("c" ThemeTitleTextColor " s" titleFontSize)
-editorGui.Add("Text", "x0 y0 w" Scale(330) " h" Scale(30) " Background" ThemeTitleColor " Border +Center", "Stratagem Editor").OnEvent("Click", StartMove)
+editorGui.Add("Text", "x0 y0 w" Scale(330) " h" Scale(30) " Background" ThemeTitleColor " Border +Center", Lang.Get("editor_title")).OnEvent("Click", StartMove)
 editorGui.Add("Button", "x+5 y0 w" Scale(30) " h" Scale(30), "X").OnEvent("Click", (*) => ExitApp())
 editorGui.SetFont("s" baseFontSize " c" ThemeTextColor)
 
 ; Search
-editorGui.Add("Text", "x" Scale(10) " y" Scale(40) " w" Scale(200), "Search:")
+editorGui.Add("Text", "x" Scale(10) " y" Scale(40) " w" Scale(200), Lang.Get("search"))
 searchEdit := editorGui.Add("Edit", "w" Scale(350) " x" Scale(10) " y+5 vSearchBox Background" ThemeControlColor)
 searchEdit.OnEvent("Change", FilterAvailableList)
 
 ; ListView
 iconSizeScaled := Scale(32)
-lbAvailable := editorGui.Add("ListView", "x" Scale(10) " y+10 r20 w" Scale(350) " Multi vAvailableList Background" ThemeListColor, ["Icon", "Name", "ID", "Type"])
+lbAvailable := editorGui.Add("ListView", "x" Scale(10) " y+10 r20 w" Scale(350) " Multi vAvailableList Background" ThemeListColor, [Lang.Get("icon"), Lang.Get("name"), "ID", Lang.Get("type")])
 lbAvailable.SetImageList(IL_ID, 1)
 lbAvailable.ModifyCol(1, iconSizeScaled + Scale(8))
 lbAvailable.ModifyCol(2, Scale(200))
@@ -48,11 +56,11 @@ lbAvailable.ModifyCol(4, 0)
 PopulateAvailableList()
 
 ; Buttons
-btnNew := editorGui.Add("Button", "w" Scale(80) " x" Scale(10) " y+10", "New")
+btnNew := editorGui.Add("Button", "w" Scale(80) " x" Scale(10) " y+10", Lang.Get("new_stratagem"))
 btnNew.OnEvent("Click", NewStratagem)
-btnEdit := editorGui.Add("Button", "w" Scale(80) " x+" Scale(5) " yp", "Edit")
+btnEdit := editorGui.Add("Button", "w" Scale(80) " x+" Scale(5) " yp", Lang.Get("edit_stratagem"))
 btnEdit.OnEvent("Click", EditSelectedStratagem)
-btnDelete := editorGui.Add("Button", "w" Scale(80) " +" Scale(5) " yp", "Delete")
+btnDelete := editorGui.Add("Button", "w" Scale(80) " +" Scale(5) " yp", Lang.Get("delete_stratagem"))
 btnDelete.OnEvent("Click", DeleteSelectedStratagem)
 btnUpSel := editorGui.Add("Button", "w" Scale(45) " h" Scale(30) " +" Scale(5) " yp", "▲")
 btnUpSel.OnEvent("Click", MoveStratagemUp)
@@ -119,7 +127,7 @@ FilterAvailableList(*) {
 EditSelectedStratagem(*) {
     row := lbAvailable.GetNext()
     if !row {
-        MsgBox("Please select a stratagem to edit.")
+        MsgBox(Lang.Get("select_to_edit"))
         return
     }
     
@@ -127,12 +135,12 @@ EditSelectedStratagem(*) {
     type := lbAvailable.GetText(row, 4)
     
     if type = "CATEGORY" || id = "" {
-        MsgBox("Cannot edit categories.")
+        MsgBox(Lang.Get("cannot_edit_categories"))
         return
     }
     
     if !Stratagems.Has(id) {
-        MsgBox("Stratagem not found.")
+        MsgBox(Lang.Get("stratagem_not_found"))
         return
     }
     
@@ -146,7 +154,7 @@ NewStratagem(*) {
 DeleteSelectedStratagem(*) {
     row := lbAvailable.GetNext()
     if !row {
-        MsgBox("Please select a stratagem to delete.")
+        MsgBox(Lang.Get("select_to_delete"))
         return
     }
     
@@ -155,11 +163,11 @@ DeleteSelectedStratagem(*) {
     name := lbAvailable.GetText(row, 2)
     
     if type = "CATEGORY" || id = "" {
-        MsgBox("Cannot delete categories.")
+        MsgBox(Lang.Get("cannot_edit_categories"))
         return
     }
     
-    if MsgBox("Are you sure you want to delete '" name "'?", "Confirm Delete", 0x24) = "No"
+    if MsgBox(Lang.Get("delete_confirm_msg") name "'?", Lang.Get("confirm_delete"), 0x24) = "No"
         return
     
     section := StratagemSections.Has(id) ? StratagemSections[id] : "Defensive Stratagems"
@@ -170,7 +178,7 @@ DeleteSelectedStratagem(*) {
 MoveStratagemUp(*) {
     row := lbAvailable.GetNext()
     if !row {
-        MsgBox("Please select a stratagem to move.")
+        MsgBox(Lang.Get("select_to_edit"))
         return
     }
     
@@ -178,7 +186,7 @@ MoveStratagemUp(*) {
     type := lbAvailable.GetText(row, 4)
     
     if type = "CATEGORY" || id = "" {
-        MsgBox("Cannot move categories.")
+        MsgBox(Lang.Get("cannot_edit_categories"))
         return
     }
     
@@ -207,7 +215,7 @@ MoveStratagemUp(*) {
 MoveStratagemDown(*) {
     row := lbAvailable.GetNext()
     if !row {
-        MsgBox("Please select a stratagem to move.")
+        MsgBox(Lang.Get("select_to_edit"))
         return
     }
     
@@ -215,7 +223,7 @@ MoveStratagemDown(*) {
     type := lbAvailable.GetText(row, 4)
     
     if type = "CATEGORY" || id = "" {
-        MsgBox("Cannot move categories.")
+        MsgBox(Lang.Get("cannot_edit_categories"))
         return
     }
     
@@ -245,9 +253,9 @@ MoveStratagemDown(*) {
 ; --- EDITOR DIALOG ---
 ShowStratagemEditor(editId) {
     isEdit := (editId != "")
-    global editorIdEdit, editorNameEdit, editorSeqEdit, editorCategoryDDL
+    global editorIdEdit, editorNameEdit, editorCategoryDDL, editorSeqDisplay, editorSeqArray
     
-    editDlg := Gui("-Caption +LastFound", isEdit ? "Edit Stratagem" : "New Stratagem")
+    editDlg := Gui("-Caption +LastFound", isEdit ? Lang.Get("edit_stratagem") : Lang.Get("new_stratagem"))
     editDlg.BackColor := ThemeBackColor
     dlgBaseFontSize := Scale(10)
     editDlg.SetFont("s" dlgBaseFontSize " c" ThemeTextColor, "Segoe UI")
@@ -257,26 +265,26 @@ ShowStratagemEditor(editId) {
     ; Title Bar
     dlgTitleFontSize := Scale(12)
     editDlg.SetFont("c" ThemeTitleTextColor " s" dlgTitleFontSize)
-    editDlg.Add("Text", "x0 y0 w" Scale(280) " h" Scale(30) " Background" ThemeTitleColor " Border +Center", isEdit ? "Edit Stratagem" : "New Stratagem").OnEvent("Click", StartMoveEdit)
+    editDlg.Add("Text", "x0 y0 w" Scale(330) " h" Scale(30) " Background" ThemeTitleColor " Border +Center", isEdit ? Lang.Get("edit_stratagem") : Lang.Get("new_stratagem")).OnEvent("Click", StartMoveEdit)
     editDlg.Add("Button", "x+5 y0 w" Scale(30) " h" Scale(30), "X").OnEvent("Click", (*) => editDlg.Destroy())
     editDlg.SetFont("s" dlgBaseFontSize " c" ThemeTextColor)
     
     ; Fields
-    editDlg.Add("Text", "x" Scale(15) " y" Scale(40) " w" Scale(60), "ID:")
-    editorIdEdit := editDlg.Add("Edit", "x+5 w" Scale(200) " Background" ThemeControlColor)
+    editDlg.Add("Text", "x" Scale(15) " y" Scale(40) " w" Scale(70), Lang.Get("id_label"))
+    editorIdEdit := editDlg.Add("Edit", "x+5 w" Scale(240) " Background" ThemeControlColor)
     if isEdit
         editorIdEdit.Value := editId
     
-    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(60), "Name:")
-    editorNameEdit := editDlg.Add("Edit", "x+5 w" Scale(200) " Background" ThemeControlColor)
+    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(70), Lang.Get("name_label"))
+    editorNameEdit := editDlg.Add("Edit", "x+5 w" Scale(240) " Background" ThemeControlColor)
     if isEdit
         editorNameEdit.Value := StratagemNames[editId]
     
-    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(60), "Category:")
-    editorCategoryDDL := editDlg.Add("DropDownList", "x+5 w" Scale(200) " Background" ThemeControlColor, ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"])
+    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(70), Lang.Get("category_label"))
+    editorCategoryDDL := editDlg.Add("DropDownList", "x+5 w" Scale(240) " Background" ThemeControlColor, [Lang.Get("cat_offensive"), Lang.Get("cat_supply"), Lang.Get("cat_defensive"), Lang.Get("cat_mission")])
     
     if isEdit && StratagemSections.Has(editId) {
-        categories := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
+        categories := [Lang.Get("cat_offensive"), Lang.Get("cat_supply"), Lang.Get("cat_defensive"), Lang.Get("cat_mission")]
         for idx, cat in categories {
             if (cat = StratagemSections[editId]) {
                 editorCategoryDDL.Choose(idx)
@@ -287,63 +295,100 @@ ShowStratagemEditor(editId) {
         editorCategoryDDL.Choose(1)
     }
     
-    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(60), "Sequence:")
-    editorSeqEdit := editDlg.Add("Edit", "x+5 w" Scale(200) " Background" ThemeControlColor)
+    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(70), Lang.Get("sequence_label"))
+    editDlg.SetFont("s" Scale(16))
+    editorSeqDisplay := editDlg.Add("Text", "x+5 w" Scale(240) " h" Scale(30) " Background" ThemeControlColor " Border +0x200", "")
+    editDlg.SetFont("s" dlgBaseFontSize)
+    global editorSeqArray
+    editorSeqArray := []
     if isEdit && Stratagems.Has(editId) {
         seq := Stratagems[editId]
-        seqStr := ""
         for i, dir in seq {
-            seqStr .= dir
-            if (i < seq.Length)
-                seqStr .= ","
+            editorSeqArray.Push(dir)
         }
-        editorSeqEdit.Value := seqStr
+        UpdateSequenceDisplay()
     }
     
-    editDlg.Add("Text", "x" Scale(80) " y+5 w" Scale(200) " cGray", "Example: Up, Down, Left, Right")
+    ; Arrow buttons for sequence input
+    btnUp := editDlg.Add("Button", "x" Scale(90) " y+10 w" Scale(35) " h" Scale(35), "🡅")
+    btnUp.OnEvent("Click", (*) => AppendToSequence("Up"))
+    btnDown := editDlg.Add("Button", "x+5 yp w" Scale(35) " h" Scale(35), "🡇")
+    btnDown.OnEvent("Click", (*) => AppendToSequence("Down"))
+    btnLeft := editDlg.Add("Button", "x+5 yp w" Scale(35) " h" Scale(35), "🡄")
+    btnLeft.OnEvent("Click", (*) => AppendToSequence("Left"))
+    btnRight := editDlg.Add("Button", "x+5 yp w" Scale(35) " h" Scale(35), "🡆")
+    btnRight.OnEvent("Click", (*) => AppendToSequence("Right"))
+    btnBack := editDlg.Add("Button", "x+10 yp w" Scale(35) " h" Scale(35), "⌫")
+    btnBack.OnEvent("Click", (*) => RemoveLastFromSequence())
+    btnClear := editDlg.Add("Button", "x+5 yp w" Scale(35) " h" Scale(35), "✕")
+    btnClear.OnEvent("Click", (*) => ClearSequence())
     
     ; Buttons
-    btnSave := editDlg.Add("Button", "x" Scale(80) " y+15 w" Scale(80) " Default", "Save")
+    btnSave := editDlg.Add("Button", "x" Scale(100) " y+15 w" Scale(80) " Default", Lang.Get("save"))
     btnSave.OnEvent("Click", (*) => SaveStratagemFromEditor(editDlg, editId))
-    btnCancel := editDlg.Add("Button", "x+10 yp w" Scale(80), "Cancel")
+    btnCancel := editDlg.Add("Button", "x+10 yp w" Scale(80), Lang.Get("cancel"))
     btnCancel.OnEvent("Click", (*) => editDlg.Destroy())
     
+    editDlg.OnEvent("Escape", (*) => editDlg.Destroy())
     editDlg.Show()
 }
 
+UpdateSequenceDisplay() {
+    global editorSeqArray, editorSeqDisplay
+    displayStr := ""
+    dirSymbols := Map("Up", "🡅", "Down", "🡇", "Left", "🡄", "Right", "🡆")
+    for i, dir in editorSeqArray {
+        if (i > 1)
+            displayStr .= " "
+        displayStr .= dirSymbols.Has(dir) ? dirSymbols[dir] : dir
+    }
+    editorSeqDisplay.Value := displayStr
+}
+
+AppendToSequence(direction) {
+    global editorSeqArray
+    editorSeqArray.Push(direction)
+    UpdateSequenceDisplay()
+}
+
+RemoveLastFromSequence() {
+    global editorSeqArray
+    if (editorSeqArray.Length > 0) {
+        editorSeqArray.Pop()
+        UpdateSequenceDisplay()
+    }
+}
+
+ClearSequence() {
+    global editorSeqArray
+    editorSeqArray := []
+    UpdateSequenceDisplay()
+}
+
 SaveStratagemFromEditor(editDlg, originalId) {
-    global editorIdEdit, editorNameEdit, editorSeqEdit, editorCategoryDDL
+    global editorIdEdit, editorNameEdit, editorSeqArray, editorCategoryDDL
     id := Trim(editorIdEdit.Value)
     name := Trim(editorNameEdit.Value)
-    seqStr := Trim(editorSeqEdit.Value)
     category := editorCategoryDDL.Text
     
-    if id = "" || name = "" || seqStr = "" {
-        MsgBox("All fields are required.")
+    if id = "" || name = "" || editorSeqArray.Length = 0 {
+        MsgBox(Lang.Get("all_fields_required"))
         return
     }
     
     if (originalId = "" || originalId != id) && Stratagems.Has(id) {
-        MsgBox("A stratagem with this ID already exists!")
+        MsgBox(Lang.Get("id_already_exists"))
         return
     }
     
-    ; Parse sequence
+    ; Use the array directly
     seq := []
-    for dir in StrSplit(seqStr, ",") {
-        dir := StrLower(Trim(dir))
-        if (dir = "up")
-            seq.Push("Up")
-        else if (dir = "down")
-            seq.Push("Down")
-        else if (dir = "left")
-            seq.Push("Left")
-        else if (dir = "right")
-            seq.Push("Right")
+    for dir in editorSeqArray {
+        seq.Push(dir)
     }
     
     if seq.Length = 0 {
-        MsgBox("Invalid sequence. Use: Up, Down, Left, Right")
+        MsgBox(Lang.Get("invalid_sequence"))
         return
     }
     
@@ -452,8 +497,13 @@ SaveStratagemToIni(id, name, seq, section := "Defensive Stratagems") {
     }
     sections[section].Push(entryLine)
     
-    ; Rebuild file
-    sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
+    ; Rebuild file with language-appropriate section names
+    lang := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
+    if (lang = "ru") {
+        sectionOrder := ["Стратагемы Наступления", "Стратагемы Снабжения", "Стратагемы Обороны", "Стратагемы Задания"]
+    } else {
+        sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
+    }
     finalContent := ""
     firstSection := true
     
@@ -525,8 +575,13 @@ SaveStratagemOrder() {
         }
     }
     
-    newContent := ""
-    sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
+    ; Use language-specific section names for output
+    lang := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
+    if (lang = "ru") {
+        sectionOrder := ["Стратагемы Наступления", "Стратагемы Снабжения", "Стратагемы Обороны", "Стратагемы Задания"]
+    } else {
+        sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
+    }
     
     for sectionName in sectionOrder {
         if !sections.Has(sectionName)
