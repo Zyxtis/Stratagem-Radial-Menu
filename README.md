@@ -109,10 +109,11 @@ A collection of helper modules designed to make gameplay more convenient and eff
 
 **Weapon Assistant:** Designed for use with weapons such as the Epoch, RS-422 "Railgun", ARC-3 "Arc Thrower", PLAS-101 "Purifier", and PLAS-15 "Loyalist".
 
-There are four available modes: Purifier/Arc Thrower, Railgun, Epoch, and Power Throw:
+There are five available modes: Arc Thrower, Purifier, Railgun, Epoch, and Power Throw:
 
-    Purifier/Arc Thrower: Charges for ~1 second, then fires. Hold the left mouse button for continuous fire.
-    Railgun (Unsafe): Automatically cuts off the charge at around 3 seconds, preventing overheating and weapon explosion. After reaching the cutoff point, the script automatically fires and reloads the weapon. If the hotkey is released earlier, the weapon fires immediately at the current charge level and reloads. Designed for use with the Railgun's "Unsafe" setting.
+    Arc Thrower: Charges for ~1 second, then fires. Hold the left mouse button for continuous fire.
+    Purifier: Charges for ~1 second, then fires. Doesn't feature a continuous fire mode.
+    Railgun (Unsafe): Automatically cuts off the charge at around 3 seconds, preventing overheating and weapon detonation. After reaching the cutoff point, the script automatically fires and reloads the weapon. If the hotkey is released earlier, the weapon fires immediately at the current charge level and reloads. Designed for use with the Railgun's "Unsafe" setting.
     Epoch: Automatically cuts off the charge at around 2.5 seconds, preventing overheating and weapon detonation. If the hotkey is released earlier, the weapon fires immediately with a lower charge. Reaching the cutoff point provides a wider damage area.
     Power Throw: Automates a timed sequence using the left mouse button and the interaction key to throw items—such as barrels and platinum bars—further than a standard throw.
 
@@ -127,7 +128,7 @@ It's not recommended to activate the Weapon Assistant while the AutoHotkey GUI w
 
 **Driver Assistant:** This feature introduces automatic gear shifting to enhance vehicle responsiveness and handling. Press W to shift to forward gear and S to shift to reverse. Additionally, the script automatically deactivates this functionality when you press E (the vehicle exit key).
 
-- Enhanced Gear Switch: Changes the gear switching algorithm, allowing direct switching to the selected gear instead of using the standard sequential switching process. This speeds up gear changes, but due to the game's built-in automatic gear shifting system, in some situations it may interfere and select a gear higher than expected. For proper operation, it is recommended to disable automatic gear shifting in the game settings.
+- Enhanced Gear Switch: Changes the gear-switching algorithm, allowing you to switch directly to the selected gear instead of sequentially shifting through the highest gear and then shifting back down. This speeds up gear changes, but due to the game's built-in automatic gear-shifting system, it may occasionally interfere and select a higher gear than expected. For proper operation of this option, it is recommended to disable automatic gear shifting in the game settings.
 - Driver Stratagem Call: Automates the process of changing seats when calling stratagems from a vehicle. When activating a stratagem through the radial menu or an assigned hotkey, the character automatically switches to the passenger seat, leans out of the window, and inputs the stratagem code. After that, you have **3 seconds** to throw the stratagem (**LMB**). If the throw is not performed within this time, the call is automatically canceled. After successfully throwing the stratagem, the character automatically returns to the driver's seat.
 
 **Inventory Manager:** Drop an item from your inventory with a single key press.
@@ -212,3 +213,13 @@ If a different resolution is detected, all pixel-based values are automatically 
 This scaling applies to all parameters that use pixel values, ensuring consistent detection behavior across different screen resolutions.
 
 ---
+
+Donations:
+
+<a href="https://ko-fi.com/zyxtis">
+  <img src="https://i.imgur.com/xL8l6ky.png" width="128" alt="Ko-fi">
+</a>
+<br>
+<a href="https://buymeacoffee.com/zyxtis">
+  <img src="https://i.imgur.com/VAyMNYd.png" width="128" alt="Buy Me a Coffee">
+</a>
