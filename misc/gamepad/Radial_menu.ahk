@@ -647,7 +647,7 @@ gamepadEnabledCheckbox.OnEvent("Click", ToggleGamepadEnabled)
 ; Gamepad Advanced Settings
 global gamepadSettingsBtn := settingsGui.Add(
     "Button",
-    "x+" Scale(5) " w" Scale(80) " h" Scale(25),
+    "x+" Scale(5) " w" Scale(60) " h" Scale(25),
     "Settings"
 )
 gamepadSettingsBtn.OnEvent("Click", ShowGamepadSettings)

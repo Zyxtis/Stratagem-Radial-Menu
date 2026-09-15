@@ -19,7 +19,7 @@ global GamepadJoyID := 0
 ; XInput is preferred because it is independent of the foreground window.
 ; Joy is kept as a fallback for DirectInput / legacy controllers.
 global GamepadBackend := "None"
-global GamepadBackendMode := "XInput"
+global GamepadBackendMode := "Auto"
 global GamepadDebugMode := false
 global GamepadXInputUser := -1
 global GamepadXInputDLL := ""
@@ -71,14 +71,17 @@ InitGamepad() {
 
     GamepadXInputAvailable := InitXInput()
 
-    if (GamepadBackendMode = "DirectInput") {
-        if (CheckLegacyJoystickConnection()) {
-            GamepadBackend := "Joy"
-            GamepadConnected := true
-        }
-    } else {
+    if (GamepadBackendMode != "DirectInput") {
         if (GamepadXInputAvailable && FindXInputController()) {
             GamepadBackend := "XInput"
+            GamepadConnected := true
+        }
+    }
+
+    ; Auto mode (and a failed XInput detection) falls back to DirectInput.
+    if (!GamepadConnected && GamepadBackendMode != "XInput") {
+        if (CheckLegacyJoystickConnection()) {
+            GamepadBackend := "Joy"
             GamepadConnected := true
         }
     }
@@ -137,20 +140,39 @@ CheckGamepadConnection(*) {
     oldBackend := GamepadBackend
     oldConnected := GamepadConnected
 
-    GamepadConnected := false
-    GamepadJoyID := 0
-    GamepadBackend := "None"
+    ; Do not clear the current source before testing alternatives. Bluetooth
+    ; DirectInput devices can briefly fail enumeration while still accepting
+    ; button input. Losing the ID here used to make the next poll impossible.
+    previousJoyID := GamepadJoyID
+    previousBackend := GamepadBackend
+    previousConnected := GamepadConnected
 
-    if (GamepadBackendMode = "DirectInput") {
-        if (CheckLegacyJoystickConnection()) {
-            GamepadBackend := "Joy"
-            GamepadConnected := true
-        }
-    } else {
+    detected := false
+    if (GamepadBackendMode != "DirectInput") {
         if (FindXInputController()) {
             GamepadBackend := "XInput"
             GamepadConnected := true
+            GamepadJoyID := 0
+            detected := true
         }
+    }
+
+    if (!detected && GamepadBackendMode != "XInput") {
+        if (CheckLegacyJoystickConnection()) {
+            GamepadBackend := "Joy"
+            GamepadConnected := true
+            detected := true
+        }
+    }
+
+    if (!detected && previousBackend = "Joy" && previousJoyID > 0) {
+        ; Preserve a previously working Bluetooth DirectInput source.
+        GamepadJoyID := previousJoyID
+        GamepadBackend := "Joy"
+        GamepadConnected := previousConnected || true
+    } else if (!detected) {
+        GamepadConnected := false
+        GamepadBackend := "None"
     }
 
     if (oldBackend != GamepadBackend || oldConnected != GamepadConnected)
@@ -162,7 +184,12 @@ CheckGamepadConnection(*) {
 CheckLegacyJoystickConnection() {
     global GamepadJoyID
 
-    GamepadJoyID := 0
+    ; Keep an already acquired Joy ID. Some Bluetooth DirectInput devices
+    ; temporarily return an empty Name even though their input is still valid.
+    if (GamepadJoyID > 0)
+        return true
+
+    ; First try the normal device-name enumeration.
     Loop 16 {
         joyName := ""
         try joyName := GetKeyState("Joy" A_Index, "Name")
@@ -171,6 +198,80 @@ CheckLegacyJoystickConnection() {
             return true
         }
     }
+
+    ; Do NOT use GetKeyState("JoyN", "P") as a connection test: an
+    ; unpressed button returns 0, so it cannot prove that the device exists.
+    ; Actual button presses are detected by GetPressedGamepadButton().
+    return false
+}
+
+; Try to discover a DirectInput device from an actual button press.
+; This is intentionally independent of the connection/status flag because
+; some Bluetooth HID/DInput devices expose their buttons before AHK exposes
+; a usable device name.
+AcquireLegacyJoystickFromInput() {
+    global GamepadJoyID, GamepadBackend, GamepadConnected
+
+    buttonMap := Map(1,"A", 2,"B", 3,"X", 4,"Y", 5,"LB", 6,"RB", 7,"Back", 8,"Start", 9,"LS", 10,"RS")
+
+    Loop 16 {
+        joyID := A_Index
+        Loop 32 {
+            btnNum := A_Index
+            try {
+                if (GetKeyState(joyID . "Joy" . btnNum, "P")) {
+                    GamepadJoyID := joyID
+                    GamepadBackend := "Joy"
+                    GamepadConnected := true
+                    return buttonMap.Has(btnNum) ? buttonMap[btnNum] : "Joy" . btnNum
+                }
+            }
+        }
+
+        ; Check POV as well.
+        try {
+            pov := GetKeyState(joyID . "JoyPOV", "P")
+            if (pov != "" && pov >= 0) {
+                GamepadJoyID := joyID
+                GamepadBackend := "Joy"
+                GamepadConnected := true
+                if (pov < 4500 || pov > 31500)
+                    return "DPadUp"
+                if (pov < 13500)
+                    return "DPadRight"
+                if (pov < 22500)
+                    return "DPadDown"
+                return "DPadLeft"
+            }
+        }
+    }
+
+    return ""
+}
+
+EnsureGamepadInputSource() {
+    global GamepadBackendMode, GamepadBackend, GamepadConnected
+    global GamepadXInputAvailable
+
+    ; Do not let a stale/disconnected status prevent actual input detection.
+    if (GamepadBackendMode != "DirectInput") {
+        if (!GamepadXInputAvailable)
+            GamepadXInputAvailable := InitXInput()
+        if (FindXInputController()) {
+            GamepadBackend := "XInput"
+            GamepadConnected := true
+            return true
+        }
+    }
+
+    if (GamepadBackendMode != "XInput") {
+        if (CheckLegacyJoystickConnection()) {
+            GamepadBackend := "Joy"
+            GamepadConnected := true
+            return true
+        }
+    }
+
     return false
 }
 
@@ -318,6 +419,16 @@ IsGamepadButtonPressed(buttonName) {
         state := ReadXInputState()
         if (state && state.Has(normalized))
             return state[normalized]
+        ; XInput disappeared or is not the right backend. Fall through.
+    }
+
+    if (GamepadBackend != "Joy")
+        EnsureGamepadInputSource()
+
+    if (GamepadBackend = "XInput") {
+        state := ReadXInputState()
+        if (state && state.Has(normalized))
+            return state[normalized]
     }
 
     return GetLegacyJoyState(buttonName)
@@ -329,8 +440,10 @@ WaitGamepadButtonRelease(buttonName) {
 }
 
 GetPressedGamepadButton() {
-    global GamepadBackend, GamepadJoyID
+    global GamepadBackend, GamepadJoyID, GamepadConnected
 
+    ; Capture must not depend on the status label. Try to acquire an input
+    ; source every time the user presses a button.
     if (GamepadBackend = "XInput") {
         state := ReadXInputState()
         if (state) {
@@ -342,10 +455,27 @@ GetPressedGamepadButton() {
         }
     }
 
+    if (GamepadBackend != "Joy")
+        EnsureGamepadInputSource()
+
+    if (GamepadBackend = "XInput") {
+        state := ReadXInputState()
+        if (state) {
+            for name in ["A", "B", "X", "Y", "LB", "RB", "Back", "Start", "LS", "RS", "LT", "RT", "DPadUp", "DPadDown", "DPadLeft", "DPadRight"] {
+                if (state[name])
+                    return name
+            }
+        }
+    }
+
     if (GamepadJoyID <= 0)
         CheckLegacyJoystickConnection()
+
+    ; If AHK cannot enumerate the Bluetooth DInput device, discover it from
+    ; the actual button press instead. This reproduces the useful behavior
+    ; of the original version without requiring a Connected status first.
     if (GamepadJoyID <= 0)
-        return ""
+        return AcquireLegacyJoystickFromInput()
 
     buttonMap := Map(1,"A", 2,"B", 3,"X", 4,"Y", 5,"LB", 6,"RB", 7,"Back", 8,"Start", 9,"LS", 10,"RS")
     Loop 32 {
@@ -695,6 +825,12 @@ CheckGamepadPolling() {
     if (!GamepadEnabled || IsMenuVisible)
         return
 
+    ; A controller can still send input even when Windows/AHK failed to
+    ; classify it correctly. Never block gameplay input because the status
+    ; text says "Disconnected".
+    if (!GamepadConnected || GamepadBackend = "None")
+        EnsureGamepadInputSource()
+
     ; Refresh connection/status periodically while polling is active (about once per second)
     statusTick++
     if (statusTick >= 20) {
@@ -789,7 +925,7 @@ CheckOCRGamepadTrigger() {
 ; ===SAVE/LOAD GAMEPAD SETTINGS===
 LoadGamepadSettings() {
     global IniPath, GamepadEnabled, GamepadMenuButton, GamepadType, GamepadNavigationStick
-	global GamepadBackendMode, GamepadDebugMode
+    global GamepadBackendMode, GamepadDebugMode
     global OCRGamepadButton, OCRUseHold, OCRHoldMs, BypassGamepadButton
     global BypassUseHold, BypassHoldMs
     
@@ -798,9 +934,9 @@ LoadGamepadSettings() {
         GamepadMenuButton := IniRead(IniPath, "Gamepad", "MenuButton", "RB")
         GamepadType := IniRead(IniPath, "Gamepad", "ControllerType", "Xbox")
         GamepadNavigationStick := IniRead(IniPath, "Gamepad", "NavigationStick", "Right")
-        GamepadBackendMode := IniRead(IniPath, "Gamepad", "Backend", "XInput")
-        if (GamepadBackendMode != "XInput" && GamepadBackendMode != "DirectInput")
-            GamepadBackendMode := "XInput"
+        GamepadBackendMode := IniRead(IniPath, "Gamepad", "Backend", "Auto")
+        if (GamepadBackendMode != "Auto" && GamepadBackendMode != "XInput" && GamepadBackendMode != "DirectInput")
+            GamepadBackendMode := "Auto"
         GamepadDebugMode := IniRead(IniPath, "Gamepad", "DebugMode", "0") = "1"
         OCRGamepadButton := IniRead(IniPath, "OCR", "GamepadButton", "")
         OCRUseHold := IniRead(IniPath, "OCR", "OCRUseHold", "0") = "1"
@@ -814,7 +950,7 @@ LoadGamepadSettings() {
         GamepadMenuButton := "RB"
         GamepadType := "Xbox"
         GamepadNavigationStick := "Right"
-        GamepadBackendMode := "XInput"
+        GamepadBackendMode := "Auto"
         GamepadDebugMode := false
         OCRGamepadButton := ""
         OCRUseHold := false
@@ -1264,9 +1400,9 @@ ShowGamepadSettings(*) {
     title.OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     settingsGui.Add("Button", "x+5 y0 w" Scale(36) " h" Scale(36), "X").OnEvent("Click", (*) => settingsGui.Destroy())
 
-    settingsGui.Add("Text", "x" Scale(15) " y" Scale(55) " w" Scale(130), "Input Backend:")
-    backendDDL := settingsGui.Add("DropDownList", "x" Scale(150) " yp-4 w" Scale(190), ["XInput", "DirectInput"])
-    backendDDL.Choose(GamepadBackendMode = "DirectInput" ? 2 : 1)
+    settingsGui.Add("Text", "x" Scale(15) " y" Scale(55) " w" Scale(100), "Input Backend:")
+    backendDDL := settingsGui.Add("DropDownList", "x+" Scale(10) " yp-4 w" Scale(120), ["Auto", "XInput", "DirectInput"])
+    backendDDL.Choose(GamepadBackendMode = "XInput" ? 2 : (GamepadBackendMode = "DirectInput" ? 3 : 1))
 
     debugCheckbox := settingsGui.Add("CheckBox", "x" Scale(15) " y+20", "Gamepad Debug Mode")
     debugCheckbox.Value := GamepadDebugMode
