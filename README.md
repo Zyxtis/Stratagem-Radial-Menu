@@ -12,6 +12,7 @@ This AutoHotkey script is built for Helldivers 2, designed to streamline key com
     Updated FindText Library: FeiYue [(AHK forum link)](https://www.autohotkey.com/boards/viewtopic.php?f=83&t=116471) [Required for the Shape-Based OCR method]
     Stratagem Icons(1.0-1.1): nvigneux [(GitHub link)](https://github.com/nvigneux/Helldivers-2-Stratagems-icons-svg)
     Improved Stratagem Icons(1.2+): Kungull [(GitHub link)](https://github.com/Kungull)
+    Help with Developing Gamepad Controls: ClockworkSoldier [(Nexus Mods link)](https://www.nexusmods.com/profile/ClockworkSoldier)
 
 ### Key Features:
 
@@ -199,6 +200,25 @@ Gray2Two — Fast and efficient for high-contrast images with consistent lightin
 
 GrayDiff2Two — Better suited for images with uneven lighting, gradients, shadows, or anti-aliased edges. By relying on local contrast instead of absolute brightness, it offers more robust detection in challenging visual conditions.
 </details>
+
+### Gamepad Settings for Convenient Control
+<details>
+<summary> **Expand** </summary>
+Steam Controller Layout:
+This short guide will help you apply the custom "HD2 - SRM Companion Layout" Steam Controller layout, that will improve controller compatibility with this mod. When using default game/mod controls, it will disable the right stick when the stratagem menu is open, which helps to reduce unintended camera movements when activating stratagems from the radial menu. If you're already familiar with Steam Controller layouts, you can simply search the layout name above. Otherwise, follow the instructions below.
+
+1. Right click on Helldivers 2 in the Steam Library.
+2. Click on "Properties".
+3. Select "Controller" on the left side menu.
+4. In the right side drop down menu, make sure "Enable Steam Input" is selected.
+5. Click the "Controller Configurator" text, just above and to the left of the drop down menu.
+6. Click on your current button layout. The "Official Layout for HELLDIVERS 2 - Gamepad" is the default.
+7. Click on "Search" in the top right.
+8. Search for "HD2 - SRM Companion Layout", and select the layout.
+9. In the bottom right, click on "Apply Layout" next to the blue X.
+10. Enjoy improved mod usability with your controller!
+</details>
+
 
 ### Resolution Scaling Note
 
