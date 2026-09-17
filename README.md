@@ -205,7 +205,8 @@ GrayDiff2Two — Better suited for images with uneven lighting, gradients, shado
 <details>
 <summary> **Expand** </summary>
 Steam Controller Layout:
-This short guide will help you apply the custom "HD2 - SRM Companion Layout" Steam Controller layout, that will improve controller compatibility with this mod. When using default game/mod controls, it will disable the right stick when the stratagem menu is open, which helps to reduce unintended camera movements when activating stratagems from the radial menu. If you're already familiar with Steam Controller layouts, you can simply search the layout name above. Otherwise, follow the instructions below.
+    
+This short guide will help you apply the custom "HD2 - SRM Companion Layout" Steam Controller layout, that will improve controller compatibility with this mod. When using default game/mod controls, it will disable the right stick when the stratagem menu is open, which helps to reduce unintended camera movements when activating stratagems from the radial menu. If you're already familiar with Steam Controller layouts, you can simply search the layout name above. Otherwise, follow the instructions below:
 
 1. Right click on Helldivers 2 in the Steam Library.
 2. Click on "Properties".
