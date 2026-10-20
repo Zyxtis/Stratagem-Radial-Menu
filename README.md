@@ -220,6 +220,23 @@ This short guide will help you apply the custom "HD2 - SRM Companion Layout" Ste
 10. Enjoy improved mod usability with your controller!
 </details>
 
+### Input Layout Remapper
+<details>
+<summary> **Expand** </summary>
+The Remapper lets you keep the familiar WASD layout for manually entering Stratagems, calibrating towers, and solving various puzzles.
+
+If you use this script to call in Stratagems while moving, you can change the in-game Stratagem input layout to Arrow Keys and use the Remapper to preserve your preferred controls for everything else.
+
+By default with active remapper, holding **Left Ctrl** makes **WASD** behave like the **Arrow Keys**, allowing you to enter Stratagems manually without having to adapt to a different layout.
+</details>
+
+### OCR Keybindings
+<details>
+<summary> **Expand** </summary>
+OCR Keybindings works similarly to OCR for the Radial Menu, but is designed for Keybindings. It allows you to configure which keys should be assigned to specific Stratagems during OCR scanning.
+
+During scanning, the script remembers the positions of Stratagems, which can be used for Scrambler bypass. Alternatively, you can manually define the Stratagem positions for the active profile to use Scrambler bypass as well.
+</details>
 
 ### Resolution Scaling Note
 
