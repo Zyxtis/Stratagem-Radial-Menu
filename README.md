@@ -34,7 +34,7 @@ This AutoHotkey script is built for Helldivers 2, designed to streamline key com
    - Set the Stratagem Input Layout to match between the script and the game (Default: Arrows in the script, WASD in-game).
 3. Managing Binds: 
    - Use the GUI to add (+) or remove (-) Stratagems for your active profile.
-   - Double-click (LMB) a Stratagem in the list popup to mark it as a favorite. This allows you to highlight essential Stratagems (like Reinforce or Resupply) and sort them with a single click.
+   - Right-click (RMB) a Stratagem in the list popup to mark it as a favorite. This allows you to highlight essential Stratagems (like Reinforce or Resupply) and sort them with a single click.
 4. Using the Radial Menu: 
    - Hold the Radial Menu Key to open the menu.
    - While holding the key, move your mouse to the desired Stratagem, then release the key to execute the macro.
