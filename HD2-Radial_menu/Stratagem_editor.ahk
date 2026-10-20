@@ -254,6 +254,7 @@ MoveStratagemDown(*) {
 ShowStratagemEditor(editId) {
     isEdit := (editId != "")
     global editorIdEdit, editorNameEdit, editorCategoryDDL, editorSeqDisplay, editorSeqArray
+    global editorSubCatDDL, editorCallInTimeEdit, editorUsesEdit, editorBetweenUsesEdit, editorFullRechargeEdit
     
     editDlg := Gui("-Caption +LastFound", isEdit ? Lang.Get("edit_stratagem") : Lang.Get("new_stratagem"))
     editDlg.BackColor := ThemeBackColor
@@ -295,6 +296,45 @@ ShowStratagemEditor(editId) {
         editorCategoryDDL.Choose(1)
     }
     
+    ; Sub-Category dropdown (language-aware)
+    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(70), Lang.Get("subcat_label"))
+    subCatKeys := ["subcat_support_weapons", "subcat_orbital", "subcat_eagle", "subcat_emplacement", "subcat_sentry", "subcat_backpack", "subcat_vehicle", "subcat_mission", "subcat_na"]
+    subCatOptions := []
+    for k in subCatKeys
+        subCatOptions.Push(Lang.Get(k))
+    editorSubCatDDL := editDlg.Add("DropDownList", "x+5 w" Scale(240) " Background" ThemeControlColor, subCatOptions)
+    if isEdit && StratagemSubCat.Has(editId) {
+        for idx, sc in subCatOptions {
+            if (sc = StratagemSubCat[editId]) {
+                editorSubCatDDL.Choose(idx)
+                break
+            }
+        }
+    }
+    ; Mission-category stratagems are always "Mission": auto-select and lock
+    editorCategoryDDL.OnEvent("Change", (*) => SyncSubCatWithCategory(editorCategoryDDL, editorSubCatDDL, subCatOptions))
+    SyncSubCatWithCategory(editorCategoryDDL, editorSubCatDDL, subCatOptions)
+    
+    ; Call-in Time and Uses
+    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(70), Lang.Get("call_in_time_label"))
+    editorCallInTimeEdit := editDlg.Add("Edit", "x+5 w" Scale(60) " Background" ThemeControlColor)
+    if isEdit && StratagemCallInTime.Has(editId)
+        editorCallInTimeEdit.Value := StratagemCallInTime[editId]
+    editDlg.Add("Text", "x+10 w" Scale(70), Lang.Get("uses_label"))
+    editorUsesEdit := editDlg.Add("Edit", "x+5 w" Scale(60) " Background" ThemeControlColor)
+    if isEdit && StratagemUses.Has(editId)
+        editorUsesEdit.Value := StratagemUses[editId]
+    
+    ; Between Uses and Full Recharge
+    editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(70), Lang.Get("between_uses_label"))
+    editorBetweenUsesEdit := editDlg.Add("Edit", "x+5 w" Scale(60) " Background" ThemeControlColor)
+    if isEdit && StratagemBetweenUses.Has(editId)
+        editorBetweenUsesEdit.Value := StratagemBetweenUses[editId]
+    editDlg.Add("Text", "x+10 w" Scale(70), Lang.Get("full_recharge_label"))
+    editorFullRechargeEdit := editDlg.Add("Edit", "x+5 w" Scale(60) " Background" ThemeControlColor)
+    if isEdit && StratagemFullRecharge.Has(editId)
+        editorFullRechargeEdit.Value := StratagemFullRecharge[editId]
+    
     editDlg.Add("Text", "x" Scale(15) " y+15 w" Scale(70), Lang.Get("sequence_label"))
     editDlg.SetFont("s" Scale(16))
     editorSeqDisplay := editDlg.Add("Text", "x+5 w" Scale(240) " h" Scale(30) " Background" ThemeControlColor " Border +0x200", "")
@@ -333,6 +373,21 @@ ShowStratagemEditor(editId) {
     editDlg.Show()
 }
 
+; Mission category always uses the "Mission" sub-category, locked from editing
+SyncSubCatWithCategory(catDDL, subDDL, subOptions) {
+    if (catDDL.Text = Lang.Get("cat_mission")) {
+        for idx, sc in subOptions {
+            if (sc = Lang.Get("subcat_mission")) {
+                subDDL.Choose(idx)
+                break
+            }
+        }
+        subDDL.Enabled := false
+    } else {
+        subDDL.Enabled := true
+    }
+}
+
 UpdateSequenceDisplay() {
     global editorSeqArray, editorSeqDisplay
     displayStr := ""
@@ -367,9 +422,16 @@ ClearSequence() {
 
 SaveStratagemFromEditor(editDlg, originalId) {
     global editorIdEdit, editorNameEdit, editorSeqArray, editorCategoryDDL
+    global editorSubCatDDL, editorCallInTimeEdit, editorUsesEdit, editorBetweenUsesEdit, editorFullRechargeEdit
     id := Trim(editorIdEdit.Value)
     name := Trim(editorNameEdit.Value)
     category := editorCategoryDDL.Text
+    ; Mission-category stratagems always have sub-category "Mission" (derived, not stored)
+    subCat := (category = Lang.Get("cat_mission")) ? "" : Trim(editorSubCatDDL.Text)
+    callInTime := Trim(editorCallInTimeEdit.Value)
+    uses := Trim(editorUsesEdit.Value)
+    betweenUses := Trim(editorBetweenUsesEdit.Value)
+    fullRecharge := Trim(editorFullRechargeEdit.Value)
     
     if id = "" || name = "" || editorSeqArray.Length = 0 {
         MsgBox(Lang.Get("all_fields_required"))
@@ -404,6 +466,16 @@ SaveStratagemFromEditor(editDlg, originalId) {
         Stratagems.Delete(originalId)
         StratagemNames.Delete(originalId)
         StratagemSections.Delete(originalId)
+        if StratagemSubCat.Has(originalId)
+            StratagemSubCat.Delete(originalId)
+        if StratagemCallInTime.Has(originalId)
+            StratagemCallInTime.Delete(originalId)
+        if StratagemUses.Has(originalId)
+            StratagemUses.Delete(originalId)
+        if StratagemBetweenUses.Has(originalId)
+            StratagemBetweenUses.Delete(originalId)
+        if StratagemFullRecharge.Has(originalId)
+            StratagemFullRecharge.Delete(originalId)
         for i, storedId in OrderedIDs {
             if (storedId = originalId) {
                 OrderedIDs.RemoveAt(i)
@@ -416,10 +488,15 @@ SaveStratagemFromEditor(editDlg, originalId) {
     Stratagems[id] := seq
     StratagemNames[id] := name
     StratagemSections[id] := category
+    StratagemSubCat[id] := subCat
+    StratagemCallInTime[id] := callInTime
+    StratagemUses[id] := uses
+    StratagemBetweenUses[id] := betweenUses
+    StratagemFullRecharge[id] := fullRecharge
     if (originalId = "" || originalId != id)
         OrderedIDs.Push(id)
     
-    SaveStratagemToIni(id, name, seq, category)
+    SaveStratagemToIni(id, name, seq, category, subCat, callInTime, uses, betweenUses, fullRecharge)
     ReloadAllData(id)
     editDlg.Destroy()
 }
@@ -450,14 +527,18 @@ ReloadAllData(selectId := "") {
 }
 
 ; --- FILE OPERATIONS ---
-SaveStratagemToIni(id, name, seq, section := "Defensive Stratagems") {
+SaveStratagemToIni(id, name, seq, section := "Defensive Stratagems", subCat := "", callInTime := "", uses := "", betweenUses := "", fullRecharge := "") {
     seqStr := ""
     for i, dir in seq {
         seqStr .= dir
         if (i < seq.Length)
             seqStr .= ","
     }
-    entryLine := id "=" name "|" seqStr
+    isMissionSection := (section = Lang.Get("cat_mission"))
+    if (isMissionSection)
+        entryLine := id "=" name "|" seqStr "|" callInTime "|" uses "|" betweenUses "|" fullRecharge
+    else
+        entryLine := id "=" name "|" seqStr "|" subCat "|" callInTime "|" uses "|" betweenUses "|" fullRecharge
     
     try fileContent := FileRead(StratagemsIniPath, "UTF-8")
     catch {
@@ -498,8 +579,8 @@ SaveStratagemToIni(id, name, seq, section := "Defensive Stratagems") {
     sections[section].Push(entryLine)
     
     ; Rebuild file with language-appropriate section names
-    lang := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
-    if (lang = "ru") {
+    langCode := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
+    if (langCode = "ru") {
         sectionOrder := ["Стратагемы Наступления", "Стратагемы Снабжения", "Стратагемы Обороны", "Стратагемы Задания"]
     } else {
         sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]
@@ -576,8 +657,8 @@ SaveStratagemOrder() {
     }
     
     ; Use language-specific section names for output
-    lang := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
-    if (lang = "ru") {
+    langCode := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
+    if (langCode = "ru") {
         sectionOrder := ["Стратагемы Наступления", "Стратагемы Снабжения", "Стратагемы Обороны", "Стратагемы Задания"]
     } else {
         sectionOrder := ["Offensive Stratagems", "Supply Stratagems", "Defensive Stratagems", "Mission Stratagems"]

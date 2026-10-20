@@ -4,6 +4,8 @@
 #Include Config\OCR_GDI.ahk
 #Include Config\assistants.ahk
 #Include Config\language.ahk
+#Include Config\Remappper.ahk
+#Include Config\cooldowns.ahk
 CoordMode("ToolTip", "Screen")
 
 ; ===GLOBAL VARIABLES===
@@ -71,6 +73,8 @@ global ActiveStratagems := []
 ; Favorites
 global FavoriteStratagems := Map(), ShowFavoritesOnly := false
 
+; Cooldowns and Eagle uses tracking are defined in Config\cooldowns.ahk
+
 ; Keybinds
 global StratagemKeybinds := Map()
 global ActiveKeybindProfile := "Default"
@@ -78,7 +82,7 @@ global ActiveKeybindStratagems := []
 global KeybindListVisibility := Map()
 
 ; Alt Keys for DropDownList
-AltKeys := ["LControl", "RControl", "LShift", "RShift", "LAlt", "RAlt", "LWin", "RWin", "Tab", "XButton1", "XButton2", "MButton", "LButton", "RButton", "NumpadEnter", "NumpadDel", "PrintScreen", "Space", "Backspace", "Enter", "Escape", "WheelUp", "WheelDown"]
+AltKeys := ["LControl", "RControl", "LShift", "RShift", "LAlt", "RAlt", "LWin", "RWin", "Tab", "NumpadEnter", "NumpadDel", "PrintScreen", "Space", "Backspace", "Enter", "Escape", "LButton", "RButton", "MButton", "XButton1", "XButton2", "WheelUp", "WheelDown"]
 AltChoiceList := ["[Input]"]
 for key in AltKeys
     AltChoiceList.Push(key)
@@ -93,7 +97,7 @@ global KeybindListShowIcon := true
 global KeybindListShowHotkey := true
 global KeybindListShowName := true
 
-; OCR
+; Radial Menu OCR
 global OCRHotkey := "F3"
 global OCRHotkeyWildcard := false
 global OCRBypassToggleHotkey := "F4"
@@ -102,6 +106,24 @@ global OCRScramblerBypassEnabled := false
 global ScramblerRadialMode := false
 global OCRUseHold := false
 global OCRHoldMs := 700
+
+; Keybindings OCR
+global KOCRHotkey := ""
+global KOCRHotkeyWildcard := false
+global KOCRMatchHotkey := ""
+global KOCRMatchHotkeyWildcard := false
+global KOCRProfileName := "OCR"
+global KOCRKeys := Map(
+    "s1", "", "s2", "", "s3", "", "s4", "", "s5", "",
+    "reinforce", "", "resupply", "", "objective", "", "eagle", "", "seaf", "", "sos", ""
+)
+global kocrGui := 0
+global kocrHotkeyInput := 0
+global kocrMatchHotkeyInput := 0
+global kocrInputs := Map()
+
+; Remembered stratagem row positions from the last Keybindings OCR scan.
+global KeybindStratagemRows := Map()
 
 ; Scrambler Bypass Settings
 global BypassGamepadButton := ""
@@ -186,8 +208,10 @@ class HotkeyInput {
         this.controls.ddl.GetPos(&ddlX, &ddlY, &ddlW, &ddlH)
         
         ; Wildcard checkbox (optional) - aligned next to the DDL using its actual position
+        ; Uses default Windows checkbox style; the "*" label is a separate themed Text control
         if (this.hasWildcard) {
-            this.controls.wildcardCb := gui.Add("CheckBox", "x" (ddlX + ddlW + 5) " y" ddlY, "*")
+            this.controls.wildcardCb := AddStandardCheckBox(gui, "x" (ddlX + ddlW + 5) " y" ddlY)
+            gui.Add("Text", "x+0 yp", "*")
             this.controls.wildcardCb.Value := this.wildcard
             this.controls.wildcardCb.OnEvent("Click", this.OnWildcardClick.Bind(this))
         }
@@ -301,8 +325,10 @@ mainTab.UseTab(1)
 
 ; Profile Section
 settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), Lang.Get("profile"))
-ProfileDDL := settingsGui.Add("DropDownList", "x" Scale(25) " y+" Scale(5) " w" Scale(370) " vProfileDDL Background2f2f2f", GetProfilesList("radial"))
+ProfileDDL := settingsGui.Add("DropDownList", "x" Scale(25) " y+" Scale(5) " w" Scale(340) " vProfileDDL Background2f2f2f", GetProfilesList("radial"))
 ProfileDDL.OnEvent("Change", SwitchProfileDDLHandler)
+global btnRenameProf := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(25) " h" Scale(25), "✎")
+btnRenameProf.OnEvent("Click", RenameRadialProfileHandler)
 SetProfileDDL("radial")
 
 btnNewProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x" Scale(25) " y+" Scale(5), Lang.Get("new_profile"))
@@ -321,17 +347,20 @@ lbActive.ModifyCol(2, Scale(200))
 lbActive.ModifyCol(3, Scale(90))
 UpdateActiveList()
 
-btnAdd := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x" Scale(25) " y+" Scale(10), "+")
+; Icon buttons (30x30 squares: + - and up/down)
+settingsGui.SetFont("s" Scale(10))
+btnAdd := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x" Scale(25) " y+" Scale(10), "＋")
 btnAdd.OnEvent("Click", (*) => ShowSelectionGui())
 
-btnRem := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(5) " yp", "-")
+btnRem := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x+" Scale(5) " yp", "－")
 btnRem.OnEvent("Click", (*) => RemoveFromActive())
 
-btnUp := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(200) " yp", "▲")
+btnUp := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x+" Scale(240) " yp", "▲")
 btnUp.OnEvent("Click", (*) => MoveItem(-1))
 
-btnDown := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(5) " yp", "▼")
+btnDown := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x+" Scale(5) " yp", "▼")
 btnDown.OnEvent("Click", (*) => MoveItem(1))
+settingsGui.SetFont("s" baseFontSize)
 
 global helpText1 := settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(360) " cGray", "")
 
@@ -348,8 +377,10 @@ mainTab.UseTab(2)
 
 ; Profile Section for Keybinds
 settingsGui.Add("Text", "x" Scale(25) " y" Scale(65) " w" Scale(200), Lang.Get("keybind_profile"))
-keybindProfileDDL := settingsGui.Add("DropDownList", "x" Scale(25) " y+" Scale(5) " w" Scale(370) " vKeybindProfileDDL Background2f2f2f", GetProfilesList("keybind"))
+keybindProfileDDL := settingsGui.Add("DropDownList", "x" Scale(25) " y+" Scale(5) " w" Scale(340) " vKeybindProfileDDL Background2f2f2f", GetProfilesList("keybind"))
 keybindProfileDDL.OnEvent("Change", SwitchKeybindProfileDDLHandler)
+global btnRenameKeybindProf := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(25) " h" Scale(25), "✎")
+btnRenameKeybindProf.OnEvent("Click", RenameKeybindProfileHandler)
 SetProfileDDL("keybind")
 
 btnNewKeybindProf := settingsGui.Add("Button", "w" Scale(180) " h" Scale(30) " x" Scale(25) " y+" Scale(5), Lang.Get("new_profile"))
@@ -369,25 +400,33 @@ lbKeybinds.ModifyCol(3, Scale(80))
 lbKeybinds.ModifyCol(4, Scale(30))
 lbKeybinds.OnEvent("DoubleClick", ShowKeybindCapture)
 
-btnAddKeybind := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x" Scale(25) " y+" Scale(10), "+")
+; Icon buttons
+settingsGui.SetFont("s" Scale(10))
+btnAddKeybind := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x" Scale(25) " y+" Scale(10), "＋")
 btnAddKeybind.OnEvent("Click", (*) => ShowKeybindSelectionGui())
 
-btnRemKeybind := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x+" Scale(5) " yp", "-")
+btnRemKeybind := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x+" Scale(5) " yp", "－")
 btnRemKeybind.OnEvent("Click", (*) => RemoveFromKeybinds())
 
 btnClearKeybind := settingsGui.Add("Button", "w" Scale(125) " h" Scale(30) " x+" Scale(5) " yp", Lang.Get("clear_hotkey"))
 btnClearKeybind.OnEvent("Click", ClearSelectedKeybind)
 
-btnToggleVisibility := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x+" Scale(35) " yp", "👁")
+; OCR button
+btnOCRKeybind := settingsGui.Add("Button", "w" Scale(45) " h" Scale(30) " x+" Scale(5) " yp", "OCR")
+btnOCRKeybind.OnEvent("Click", (*) => ShowKeybindOCRSpecPopup())
+
+; Calculate position for up/down buttons matching the radial tab layout
+keybindBtnX := Scale(25) + Scale(30) + Scale(5) + Scale(30) + Scale(240)
+
+btnToggleVisibility := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x" (keybindBtnX - Scale(35)) " yp", "👁")
 btnToggleVisibility.OnEvent("Click", ToggleKeybindVisibility)
 
-; Calculate position for up/down buttons matching the radial tab layout (avoids cumulative rounding from multiple x+ steps)
-keybindBtnX := Scale(25) + Scale(40) + Scale(5) + Scale(40) + Scale(200)
-btnKeyUp := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x" keybindBtnX " yp", "▲")
+btnKeyUp := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x" keybindBtnX " yp", "▲")
 btnKeyUp.OnEvent("Click", (*) => MoveKeybindItem(-1))
 
-btnKeyDown := settingsGui.Add("Button", "w" Scale(40) " h" Scale(30) " x" (keybindBtnX + Scale(40) + Scale(5)) " yp", "▼")
+btnKeyDown := settingsGui.Add("Button", "w" Scale(30) " h" Scale(30) " x" (keybindBtnX + Scale(30) + Scale(5)) " yp", "▼")
 btnKeyDown.OnEvent("Click", (*) => MoveKeybindItem(1))
+settingsGui.SetFont("s" baseFontSize)
 
 settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(370) " cGray", Lang.Get("double_click_hint"))
 
@@ -422,6 +461,13 @@ else if (InputLayout = "Custom")
 else
     inputLayoutDDL.Choose(1)
 inputLayoutDDL.OnEvent("Change", (*) => UpdateInputLayout())
+
+; Remap toggle + Remap Master wrench, next to the input layout dropdown
+global remapToggleBtn := settingsGui.Add("Text", "x+" Scale(5) " yp w" Scale(75) " h" Scale(23) " Center Border", "REMAP: OFF")
+remapToggleBtn.OnEvent("Click", Remap_ToggleFromMain)
+
+global remapWrenchBtn := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(23) " h" Scale(23), "🔧")
+remapWrenchBtn.OnEvent("Click", ShowRemapMasterPopup)
 
 settingsGui.Add("Text", "x" Scale(25) " y+" Scale(10) " w" Scale(320), Lang.Get("delays"))
 
@@ -503,15 +549,18 @@ textSizeEdit := settingsGui.Add("Edit", "w" Scale(40) " x" Scale(255) " y+" Scal
 settingsGui.Add("Text", "x+5 yp w" Scale(95), Lang.Get("text_size"))
 textSizeEdit.OnEvent("Change", (*) => UpdateTextSize())
 
-settingsGui.Add("Text", "x" Scale(255) " y+" Scale(10), Lang.Get("show_text"))
-showTextCheckbox := settingsGui.Add("CheckBox", "x+5 yp vShowText")
+; Text checkbox and Cooldowns button
+settingsGui.Add("Text", "x" Scale(255) " y+10", Lang.Get("show_text"))
+showTextCheckbox := AddStandardCheckBox(settingsGui, "x+5 yp vShowText")
 showTextCheckbox.Value := ShowText
 showTextCheckbox.OnEvent("Click", (*) => UpdateShowText())
+global cooldownsBtn := settingsGui.Add("Button", "x+" Scale(10) " yp-5 w" Scale(75) " h" Scale(25), Lang.Get("cooldowns"))
+cooldownsBtn.OnEvent("Click", (*) => ShowCooldownsPopup())
 
 ; Camera Lock Bypass - GroupBox
 settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(310) " w" Scale(155) " h" Scale(155), Lang.Get("camera_lock_bypass"))
 settingsGui.Add("Text", "x" Scale(255) " y" Scale(330), Lang.Get("lock_cam"))
-blockCameraCheckbox := settingsGui.Add("CheckBox", "x+5 yp vBlockCameraBypass")
+blockCameraCheckbox := AddStandardCheckBox(settingsGui, "x+5 yp vBlockCameraBypass")
 blockCameraCheckbox.Value := BlockCameraBypass
 blockCameraCheckbox.OnEvent("Click", (*) => ToggleBlockCamera())
 
@@ -524,12 +573,12 @@ mapInputTypeDDL.OnEvent("Change", (*) => UpdateMapInputType())
 ; Active Game Check - GroupBox
 settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(470) " w" Scale(155) " h" Scale(105), Lang.Get("active_game_check"))
 settingsGui.Add("Text", "x" Scale(255) " y" Scale(490), Lang.Get("auto_pause"))
-autoPauseCheckbox := settingsGui.Add("CheckBox", "x+5 yp vAutoPauseActive")
+autoPauseCheckbox := AddStandardCheckBox(settingsGui, "x+5 yp vAutoPauseActive")
 autoPauseCheckbox.Value := AutoPauseActive
 autoPauseCheckbox.OnEvent("Click", (*) => ToggleAutoPause())
 
 settingsGui.Add("Text", "x" Scale(255) " y+" Scale(8), Lang.Get("auto_close"))
-autoCloseCheckbox := settingsGui.Add("CheckBox", "x+5 yp vAutoCloseActive")
+autoCloseCheckbox := AddStandardCheckBox(settingsGui, "x+5 yp vAutoCloseActive")
 autoCloseCheckbox.Value := AutoCloseActive
 autoCloseCheckbox.OnEvent("Click", (*) => ToggleAutoClose())
 
@@ -540,7 +589,7 @@ gameCheckTimerEdit.OnEvent("Change", (*) => UpdateGameCheckTimer())
 ; Auto Language Switch - GroupBox
 settingsGui.Add("GroupBox", "x" Scale(245) " y" Scale(580) " w" Scale(155) " h" Scale(80), Lang.Get("auto_language_switch"))
 settingsGui.Add("Text", "x" Scale(255) " y" Scale(600), Lang.Get("auto_lang"))
-autoLangCheckbox := settingsGui.Add("CheckBox", "x+5 yp vAutoLanguageSwitch")
+autoLangCheckbox := AddStandardCheckBox(settingsGui, "x+5 yp vAutoLanguageSwitch")
 autoLangCheckbox.Value := AutoLanguageSwitch
 autoLangCheckbox.OnEvent("Click", (*) => ToggleAutoLanguageSwitch())
 
@@ -553,6 +602,7 @@ for idx, code in EnglishLayoutCodes {
     }
 }
 autoLangLayoutDDL.OnEvent("Change", UpdateAutoLanguageLayout)
+
 ; ---Tab 4: Misc---
 mainTab.UseTab(4)
 
@@ -569,15 +619,18 @@ keybindListDragDelayEdit.OnEvent("Change", (*) => UpdateKeybindListDragDelay())
 
 ; Show/hide fields checkboxes
 settingsGui.Add("Text", "x" Scale(35) " y+" Scale(15) " w" Scale(120), Lang.Get("show_fields"))
-keybindListShowIconCb := settingsGui.Add("CheckBox", "x" Scale(35) " y+" Scale(5) " vKeybindListShowIcon", Lang.Get("icon_short"))
+keybindListShowIconCb := AddStandardCheckBox(settingsGui, "x" Scale(35) " y+" Scale(5) " vKeybindListShowIcon")
+settingsGui.Add("Text", "x+0 yp", Lang.Get("icon_short"))
 keybindListShowIconCb.Value := KeybindListShowIcon
 keybindListShowIconCb.OnEvent("Click", (*) => UpdateKeybindListShowFields())
 
-keybindListShowHotkeyCb := settingsGui.Add("CheckBox", "x+" Scale(2) " vKeybindListShowHotkey", Lang.Get("key_short"))
+keybindListShowHotkeyCb := AddStandardCheckBox(settingsGui, "x+" Scale(10) " vKeybindListShowHotkey")
+settingsGui.Add("Text", "x+0 yp", Lang.Get("key_short"))
 keybindListShowHotkeyCb.Value := KeybindListShowHotkey
 keybindListShowHotkeyCb.OnEvent("Click", (*) => UpdateKeybindListShowFields())
 
-keybindListShowNameCb := settingsGui.Add("CheckBox", "x+" Scale(2) " vKeybindListShowName", Lang.Get("name_short"))
+keybindListShowNameCb := AddStandardCheckBox(settingsGui, "x+" Scale(10) " vKeybindListShowName")
+settingsGui.Add("Text", "x+0 yp", Lang.Get("name_short"))
 keybindListShowNameCb.Value := KeybindListShowName
 keybindListShowNameCb.OnEvent("Click", (*) => UpdateKeybindListShowFields())
 
@@ -640,9 +693,17 @@ settingsGui.Add("GroupBox", "x" Scale(205) " y" Scale(65) " w" Scale(190) " h" S
 
 ; Enable Gamepad checkbox
 settingsGui.Add("Text", "x" Scale(215) " y" Scale(90), Lang.Get("enable_gamepad"))
-global gamepadEnabledCheckbox := settingsGui.Add("CheckBox", "x+" Scale(5) " yp vGamepadEnabled")
+global gamepadEnabledCheckbox := AddStandardCheckBox(settingsGui, "x+" Scale(5) " yp vGamepadEnabled")
 gamepadEnabledCheckbox.Value := GamepadEnabled
 gamepadEnabledCheckbox.OnEvent("Click", ToggleGamepadEnabled)
+
+; Gamepad Advanced Settings
+global gamepadSettingsBtn := settingsGui.Add(
+    "Button",
+    "x+" Scale(5) " w" Scale(25) " h" Scale(25),
+    "🔧"
+)
+gamepadSettingsBtn.OnEvent("Click", ShowGamepadSettings)
 
 ; Controller Type dropdown
 settingsGui.Add("Text", "x" Scale(215) " y+" Scale(10) " w" Scale(120), Lang.Get("controller_type"))
@@ -662,7 +723,7 @@ SetGamepadMenuButtonDDL()
 gamepadMenuButtonDDL.OnEvent("Change", OnGamepadMenuButtonDDLChange)
 
 ; Button to capture gamepad button
-global gamepadCaptureBtn := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(24) " h" Scale(24), "✎")
+global gamepadCaptureBtn := settingsGui.Add("Button", "x+" Scale(5) " yp w" Scale(25) " h" Scale(25), "✎")
 gamepadCaptureBtn.OnEvent("Click", ShowGamepadCapturePopup)
 
 ; Navigation Stick dropdown
@@ -687,7 +748,7 @@ ocrHoldEdit.OnEvent("Change", UpdateOCRHoldMs)
 ocrHoldEdit.Enabled := OCRUseHold
 
 settingsGui.Add("Text", "x+" Scale(5) " yp w" Scale(40), Lang.Get("hold_ms"))
-global ocrHoldCheckbox := settingsGui.Add("CheckBox", "x+" Scale(3) " yp vOCRUseHold")
+global ocrHoldCheckbox := AddStandardCheckBox(settingsGui, "x+" Scale(3) " yp vOCRUseHold")
 ocrHoldCheckbox.Value := OCRUseHold
 ocrHoldCheckbox.OnEvent("Click", UpdateOCRUseHold)
 
@@ -702,7 +763,7 @@ bypassHoldEdit.OnEvent("Change", UpdateBypassHoldMs)
 bypassHoldEdit.Enabled := BypassUseHold
 
 settingsGui.Add("Text", "x+" Scale(5) " yp w" Scale(40), Lang.Get("hold_ms"))
-global bypassHoldCheckbox := settingsGui.Add("CheckBox", "x+" Scale(3) " yp vBypassUseHold")
+global bypassHoldCheckbox := AddStandardCheckBox(settingsGui, "x+" Scale(3) " yp vBypassUseHold")
 bypassHoldCheckbox.Value := BypassUseHold
 bypassHoldCheckbox.OnEvent("Click", UpdateBypassUseHold)
 
@@ -711,6 +772,9 @@ btnOCRSettings.OnEvent("Click", (*) => OCR_ShowSettingsWindow())
 
 mainTab.UseTab()
 settingsGui.Show()
+
+; Sync the remap toggle button with the loaded remap state
+UpdateRemapButton()
 
 ; Start timer if auto-pause or auto-close is enabled in settings
 if (AutoPauseActive || AutoCloseActive) {
@@ -724,6 +788,8 @@ SetRadialMenuHotkey()
 SetProfileSwitchHotkeys()
 SetOCRHotkey()
 SetOCRBypassToggleHotkey()
+SetKOCRHotkey()
+SetKOCRMatchHotkey()
 SetWeaponAssistantHotkey()
 SetWeaponSafetyHotkey()
 SetWeaponCycleHotkey()
@@ -784,13 +850,14 @@ lbAvailable.ModifyCol(2, nameAvail)
 lbAvailable.ModifyCol(3, 0)    ; ID (hidden)
 lbAvailable.ModifyCol(4, 0)    ; Type (hidden)
 lbAvailable.ModifyCol(5, favAvail)
-lbAvailable.OnEvent("DoubleClick", ToggleFavorite)
+lbAvailable.OnEvent("DoubleClick", AddSelected)
+lbAvailable.OnEvent("ContextMenu", FavoriteOnContextMenu)
 PopulateAvailableList()
 
 btnAddSel := selectionGui.Add("Button", "w" Scale(300) " x" Scale(10) " y+" Scale(10), Lang.Get("add_selected"))
 btnAddSel.OnEvent("Click", AddSelected)
 
-selectionGui.Add("Text", "w" Scale(300) " x" Scale(10) " y+" Scale(5) " cYellow Center", Lang.Get("double_click_favorite"))
+selectionGui.Add("Text", "w" Scale(300) " x" Scale(10) " y+" Scale(5) " cYellow Center", Lang.Get("right_click_favorite"))
 
 ; --- Tab Focus Clear Function ---
 ClearTabFocus(*) {
@@ -1045,11 +1112,12 @@ SaveProfiles() {
     global ActiveProfile, ActiveStratagems
     
     ; Save to profile-specific section
-    section := "Profile_" . ActiveProfile
+    section := GetProfileSection("radial", ActiveProfile)
     str := ""
     for id in ActiveStratagems
         str .= id ","
     profileIniPath := GetRadialProfileIniPath(ActiveProfile)
+    IniWrite(ActiveProfile, profileIniPath, section, "Name")
     IniWrite(RTrim(str, ","), profileIniPath, section, "ActiveList")
     
     ; Save active profile setting
@@ -1057,6 +1125,7 @@ SaveProfiles() {
 }
 
 SaveSettings() {
+    global CooldownsEnabled, CooldownDeploymentKey, CooldownDeploymentGamepadButton, CooldownModules, CooldownWaitDeployKey, CooldownDeployWaitTimeMs, BlockStratagemsOnCooldown
 
     ; Save global settings (Tab 2 - Settings page)
     IniWrite(StratagemMenuKey, IniPath, "Settings", "StratagemMenuKey")
@@ -1100,9 +1169,36 @@ SaveSettings() {
     IniWrite(OCRBypassToggleHotkey, IniPath, "OCR", "BypassToggleHotkey")
     IniWrite(OCRBypassToggleHotkeyWildcard ? "1" : "0", IniPath, "OCR", "BypassToggleHotkeyWildcard")
     
+    ; Save Keybindings OCR settings
+    IniWrite(KOCRHotkey, IniPath, "KeybindOCR", "Hotkey")
+    IniWrite(KOCRHotkeyWildcard ? "1" : "0", IniPath, "KeybindOCR", "HotkeyWildcard")
+    IniWrite(KOCRMatchHotkey, IniPath, "KeybindOCR", "MatchHotkey")
+    IniWrite(KOCRMatchHotkeyWildcard ? "1" : "0", IniPath, "KeybindOCR", "MatchHotkeyWildcard")
+    IniWrite(KOCRKeys["s1"], IniPath, "KeybindOCR", "Slot1")
+    IniWrite(KOCRKeys["s2"], IniPath, "KeybindOCR", "Slot2")
+    IniWrite(KOCRKeys["s3"], IniPath, "KeybindOCR", "Slot3")
+    IniWrite(KOCRKeys["s4"], IniPath, "KeybindOCR", "Slot4")
+    IniWrite(KOCRKeys["s5"], IniPath, "KeybindOCR", "Slot5")
+    IniWrite(KOCRKeys["reinforce"], IniPath, "KeybindOCR", "Reinforce")
+    IniWrite(KOCRKeys["resupply"], IniPath, "KeybindOCR", "Resupply")
+    IniWrite(KOCRKeys["objective"], IniPath, "KeybindOCR", "Objective")
+    IniWrite(KOCRKeys["eagle"], IniPath, "KeybindOCR", "Eagle")
+    IniWrite(KOCRKeys["seaf"], IniPath, "KeybindOCR", "SEAF")
+    IniWrite(KOCRKeys["sos"], IniPath, "KeybindOCR", "SOS")
+
     ; Save Camera Bypass settings
     IniWrite(OpenMapKey, IniPath, "Radial_Menu", "OpenMapKey")
     IniWrite(MapInputType, IniPath, "Radial_Menu", "MapInputType")
+
+    ; Save Cooldown settings
+    IniWrite(CooldownsEnabled ? "1" : "0", IniPath, "Cooldowns", "Enabled")
+    IniWrite(CooldownDeploymentKey, IniPath, "Cooldowns", "DeploymentKey")
+    IniWrite(CooldownDeploymentGamepadButton, IniPath, "Cooldowns", "DeploymentGamepadButton")
+    IniWrite(CooldownWaitDeployKey ? "1" : "0", IniPath, "Cooldowns", "WaitDeployKey")
+    IniWrite(CooldownDeployWaitTimeMs, IniPath, "Cooldowns", "DeployWaitTimeMs")
+    IniWrite(BlockStratagemsOnCooldown ? "1" : "0", IniPath, "Cooldowns", "BlockOnCooldown")
+    for moduleName, enabled in CooldownModules
+        IniWrite(enabled ? "1" : "0", IniPath, "Cooldowns", "Module_" moduleName)
 }
 
 LoadSettings() {
@@ -1113,13 +1209,15 @@ LoadSettings() {
     global CustomUpKey, CustomDownKey, CustomLeftKey, CustomRightKey
     global KeybindListHotkey, KeybindListHotkeyWildcard, KeybindListTransparency, KeybindListDragDelay, KeybindListShowIcon, KeybindListShowHotkey, KeybindListShowName
     global OCRHotkey, OCRHotkeyWildcard, OCRBypassToggleHotkey, OCRBypassToggleHotkeyWildcard
+    global KOCRHotkey, KOCRHotkeyWildcard, KOCRKeys, KOCRMatchHotkey, KOCRMatchHotkeyWildcard
+    global CooldownsEnabled, CooldownDeploymentKey, CooldownDeploymentGamepadButton, CooldownModules, StratagemCooldownReadyAt, CooldownPendingId, CooldownWaitDeployKey, CooldownDeployWaitTimeMs, BlockStratagemsOnCooldown
     
     try {
         ; Load active profile first
         ActiveProfile := IniRead(IniPath, "Settings", "ActiveProfile", "Default")
         
         ; Load profile-specific stratagems
-        section := "Profile_" . ActiveProfile
+        section := GetProfileSection("radial", ActiveProfile)
         profileIniPath := GetRadialProfileIniPath(ActiveProfile)
         data := IniRead(profileIniPath, section, "ActiveList", "")
         if data != "" {
@@ -1193,7 +1291,36 @@ LoadSettings() {
         OCRHotkeyWildcard := IniRead(IniPath, "OCR", "HotkeyWildcard", "0") = "1" ? true : false
         OCRBypassToggleHotkey := IniRead(IniPath, "OCR", "BypassToggleHotkey", "F4")
         OCRBypassToggleHotkeyWildcard := IniRead(IniPath, "OCR", "BypassToggleHotkeyWildcard", "0") = "1" ? true : false
-        
+
+        ; Load Keybindings OCR settings
+        KOCRHotkey := IniRead(IniPath, "KeybindOCR", "Hotkey", "")
+        KOCRHotkeyWildcard := IniRead(IniPath, "KeybindOCR", "HotkeyWildcard", "0") = "1" ? true : false
+        KOCRMatchHotkey := IniRead(IniPath, "KeybindOCR", "MatchHotkey", "")
+        KOCRMatchHotkeyWildcard := IniRead(IniPath, "KeybindOCR", "MatchHotkeyWildcard", "0") = "1" ? true : false
+        KOCRKeys["s1"] := IniRead(IniPath, "KeybindOCR", "Slot1", "")
+        KOCRKeys["s2"] := IniRead(IniPath, "KeybindOCR", "Slot2", "")
+        KOCRKeys["s3"] := IniRead(IniPath, "KeybindOCR", "Slot3", "")
+        KOCRKeys["s4"] := IniRead(IniPath, "KeybindOCR", "Slot4", "")
+        KOCRKeys["s5"] := IniRead(IniPath, "KeybindOCR", "Slot5", "")
+        KOCRKeys["reinforce"] := IniRead(IniPath, "KeybindOCR", "Reinforce", "")
+        KOCRKeys["resupply"] := IniRead(IniPath, "KeybindOCR", "Resupply", "")
+        KOCRKeys["objective"] := IniRead(IniPath, "KeybindOCR", "Objective", "")
+        KOCRKeys["eagle"] := IniRead(IniPath, "KeybindOCR", "Eagle", "")
+        KOCRKeys["seaf"] := IniRead(IniPath, "KeybindOCR", "SEAF", "")
+        KOCRKeys["sos"] := IniRead(IniPath, "KeybindOCR", "SOS", "")
+
+        ; Load Cooldown settings
+        CooldownsEnabled := IniRead(IniPath, "Cooldowns", "Enabled", "0") = "1" ? true : false
+        CooldownDeploymentKey := IniRead(IniPath, "Cooldowns", "DeploymentKey", "LButton")
+        CooldownDeploymentGamepadButton := IniRead(IniPath, "Cooldowns", "DeploymentGamepadButton", "")
+        CooldownWaitDeployKey := IniRead(IniPath, "Cooldowns", "WaitDeployKey", "1") = "1" ? true : false
+        CooldownDeployWaitTimeMs := Integer(IniRead(IniPath, "Cooldowns", "DeployWaitTimeMs", "5000"))
+        if (CooldownDeployWaitTimeMs < 1000 || CooldownDeployWaitTimeMs > 60000)
+            CooldownDeployWaitTimeMs := 5000
+        BlockStratagemsOnCooldown := IniRead(IniPath, "Cooldowns", "BlockOnCooldown", "1") = "1" ? true : false
+        for moduleName, _ in CooldownModules
+            CooldownModules[moduleName] := IniRead(IniPath, "Cooldowns", "Module_" moduleName, "0") = "1" ? true : false
+
         ScreenCX := A_ScreenWidth // 2
         ScreenCY := A_ScreenHeight // 2
     } catch as err {
@@ -1207,16 +1334,11 @@ GetProfilesList(profileType := "radial") {
     global ProfilesIniPath, OCRProfileIniPath
     profiles := []
     
-    ; Always include Default profile first
-    profiles.Push("Default")
-    
     ; Determine section prefix based on profile type
     prefix := profileType = "keybind" ? "KeybindProfile_" : "Profile_"
     
-    ; Scan INI files for profile sections
-    iniFiles := [ProfilesIniPath]
-    if (profileType = "radial")
-        iniFiles.Push(OCRProfileIniPath)
+    ; Scan INI files for profile sections (both profiles.ini and ocr.ini)
+    iniFiles := [ProfilesIniPath, OCRProfileIniPath]
 
     pattern := "^\[" . prefix . "(.+)\]$"
     for filePath in iniFiles {
@@ -1228,20 +1350,40 @@ GetProfilesList(profileType := "radial") {
             for line in StrSplit(fileContent, "`n", "`r") {
                 line := Trim(line)
                 if RegExMatch(line, pattern, &m) {
+                    ; The section header is percent-encoded. Prefer the display
+                    ; name stored in the "Name" key; fall back to decoding the
+                    ; header for profiles that don't have a Name key yet.
+                    displayName := ""
+                    try displayName := IniRead(filePath, prefix . m[1], "Name", "")
+                    if (displayName = "")
+                        displayName := DecodeProfileName(m[1])
+
                     ; Only add if not already in list (avoid duplicates)
                     found := false
                     for name in profiles {
-                        if (name = m[1]) {
+                        if (name = displayName) {
                             found := true
                             break
                         }
                     }
                     if !found
-                        profiles.Push(m[1])
+                        profiles.Push(displayName)
                 }
             }
         }
     }
+    
+    ; The Default profile is only listed if its section exists; when no
+    ; profiles exist at all (fresh setup), add it so the list is never empty.
+    hasDefault := false
+    for name in profiles {
+        if (name = "Default") {
+            hasDefault := true
+            break
+        }
+    }
+    if (!hasDefault && profiles.Length = 0)
+        profiles.Push("Default")
     
     return profiles
 }
@@ -1294,8 +1436,8 @@ SwitchProfile(profileType := "radial", newProfile := "", forceReload := false) {
         ActiveKeybindStratagems := []
         
         ; Load profile data
-        section := "KeybindProfile_" . ActiveKeybindProfile
-        profileIniPath := ProfilesIniPath
+        section := GetProfileSection("keybind", ActiveKeybindProfile)
+        profileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
         
         try {
             ; Load stratagems list
@@ -1354,7 +1496,7 @@ SwitchProfile(profileType := "radial", newProfile := "", forceReload := false) {
         
         ; Clear and load new profile's stratagems
         ActiveStratagems := []
-        section := "Profile_" . ActiveProfile
+        section := GetProfileSection("radial", ActiveProfile)
         profileIniPath := GetRadialProfileIniPath(ActiveProfile)
         
         try {
@@ -1425,8 +1567,11 @@ CreateProfile(profileType := "radial") {
         StratagemKeybinds := Map()
         ActiveKeybindStratagems := []
         
-        ; Save to INI
-        IniWrite("", ProfilesIniPath, prefix . ActiveKeybindProfile, "ActiveList")
+        ; Save to INI (the dedicated "OCR" keybind profile goes to ocr.ini)
+        section := GetProfileSection("keybind", ActiveKeybindProfile)
+        kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
+        IniWrite(ActiveKeybindProfile, kbProfileIniPath, section, "Name")
+        IniWrite("", kbProfileIniPath, section, "ActiveList")
         IniWrite(ActiveKeybindProfile, IniPath, "Settings", "ActiveKeybindProfile")
         
         ; Refresh the dropdown and list
@@ -1451,7 +1596,9 @@ CreateProfile(profileType := "radial") {
         
         ; Save to INI (creates the section with empty list)
         profileIniPath := GetRadialProfileIniPath(ActiveProfile)
-        IniWrite("", profileIniPath, prefix . ActiveProfile, "ActiveList")
+        section := GetProfileSection("radial", ActiveProfile)
+        IniWrite(ActiveProfile, profileIniPath, section, "Name")
+        IniWrite("", profileIniPath, section, "ActiveList")
         IniWrite(ActiveProfile, IniPath, "Settings", "ActiveProfile")
         
         ; Refresh the dropdown and list
@@ -1472,11 +1619,6 @@ DeleteProfile(profileType := "radial") {
     if (profileType = "keybind") {
         global ActiveKeybindProfile, ActiveKeybindStratagems, StratagemKeybinds, keybindProfileDDL
         
-        if (ActiveKeybindProfile = DefaultProfile) {
-            MsgBox(Lang.Get("cannot_delete_default"), Lang.Get("error_title"), 0x10)
-            return
-        }
-        
         result := MsgBox(Lang.Get("delete_profile_confirm") . ActiveKeybindProfile . "'?", Lang.Get("confirm_delete"), 0x24)
         if (result = "No")
             return
@@ -1485,42 +1627,63 @@ DeleteProfile(profileType := "radial") {
         for id in StratagemKeybinds
             UnregisterStratagemHotkey(id)
         
-        ; Delete the profile section
+        ; Delete the profile section (from the correct INI file)
         try {
-            IniDelete(ProfilesIniPath, prefix . ActiveKeybindProfile)
+            IniDelete(GetKeybindProfileIniPath(ActiveKeybindProfile), GetProfileSection("keybind", ActiveKeybindProfile))
         } catch {
         }
         
-        ; Switch to Default profile
-        ActiveKeybindProfile := DefaultProfile
-        IniWrite(ActiveKeybindProfile, IniPath, "Settings", "ActiveKeybindProfile")
+        ; Determine profile to switch to: prefer Default, otherwise the first remaining
+        profiles := GetProfilesList("keybind")
+        switchTo := ""
+        for name in profiles {
+            if (name = DefaultProfile) {
+                switchTo := name
+                break
+            }
+        }
+        if (switchTo = "")
+            switchTo := profiles.Length ? profiles[1] : ""
         
-        ; Load Default profile's data
         StratagemKeybinds := Map()
         ActiveKeybindStratagems := []
         
-        try {
-            data := IniRead(ProfilesIniPath, prefix . DefaultProfile, "ActiveList", "")
-            if data != "" {
-                for id in StrSplit(data, ",") {
-                    id := Trim(id)
-                    if id != "" && Stratagems.Has(id)
-                        ActiveKeybindStratagems.Push(id)
-                }
-            }
-            
-            ; Load hotkeys
-            for id in ActiveKeybindStratagems {
-                try {
-                    hk := IniRead(ProfilesIniPath, prefix . DefaultProfile, id, "")
-                    if (hk != "") {
-                        StratagemKeybinds[id] := hk
-                        RegisterStratagemHotkey(id, hk)
+        if (switchTo = "") {
+            ; Last profile deleted - recreate an empty Default profile
+            switchTo := DefaultProfile
+            section := GetProfileSection("keybind", switchTo)
+            IniWrite(switchTo, ProfilesIniPath, section, "Name")
+            IniWrite("", ProfilesIniPath, section, "ActiveList")
+        } else {
+            ; Load target profile's data (from the correct INI file)
+            targetIniPath := GetKeybindProfileIniPath(switchTo)
+            try {
+                targetSection := GetProfileSection("keybind", switchTo)
+                data := IniRead(targetIniPath, targetSection, "ActiveList", "")
+                if data != "" {
+                    for id in StrSplit(data, ",") {
+                        id := Trim(id)
+                        if id != "" && Stratagems.Has(id)
+                            ActiveKeybindStratagems.Push(id)
                     }
                 }
+                
+                ; Load hotkeys
+                for id in ActiveKeybindStratagems {
+                    try {
+                        hk := IniRead(targetIniPath, targetSection, id, "")
+                        if (hk != "") {
+                            StratagemKeybinds[id] := hk
+                            RegisterStratagemHotkey(id, hk)
+                        }
+                    }
+                }
+            } catch {
             }
-        } catch {
         }
+        
+        ActiveKeybindProfile := switchTo
+        IniWrite(ActiveKeybindProfile, IniPath, "Settings", "ActiveKeybindProfile")
         
         ; Refresh the dropdown and list
         keybindProfileDDL.Delete()
@@ -1533,11 +1696,6 @@ DeleteProfile(profileType := "radial") {
     else {
         global ActiveProfile, ActiveStratagems, ProfileDDL
         
-        if (ActiveProfile = DefaultProfile) {
-            MsgBox(Lang.Get("cannot_delete_default"), Lang.Get("error_title"), 0x10)
-            return
-        }
-        
         ; Confirm deletion
         result := MsgBox(Lang.Get("delete_profile_confirm") . ActiveProfile . "'?", Lang.Get("confirm_delete"), 0x24)
         if (result = "No")
@@ -1546,28 +1704,48 @@ DeleteProfile(profileType := "radial") {
         ; Delete the profile section
         try {
             profileIniPath := GetRadialProfileIniPath(ActiveProfile)
-            IniDelete(profileIniPath, prefix . ActiveProfile)
+            IniDelete(profileIniPath, GetProfileSection("radial", ActiveProfile))
         } catch {
         }
         
-        ; Switch to Default profile
-        ActiveProfile := DefaultProfile
-        IniWrite(ActiveProfile, IniPath, "Settings", "ActiveProfile")
-        
-        ; Load Default profile's stratagems
-        ActiveStratagems := []
-        try {
-            defaultProfileIniPath := GetRadialProfileIniPath(DefaultProfile)
-            data := IniRead(defaultProfileIniPath, prefix . DefaultProfile, "ActiveList", "")
-            if data != "" {
-                for id in StrSplit(data, ",") {
-                    id := Trim(id)
-                    if id != "" && Stratagems.Has(id)
-                        ActiveStratagems.Push(id)
-                }
+        ; Determine profile to switch to: prefer Default, otherwise the first remaining
+        profiles := GetProfilesList("radial")
+        switchTo := ""
+        for name in profiles {
+            if (name = DefaultProfile) {
+                switchTo := name
+                break
             }
-        } catch {
         }
+        if (switchTo = "")
+            switchTo := profiles.Length ? profiles[1] : ""
+        
+        ; Load target profile's stratagems
+        ActiveStratagems := []
+        if (switchTo = "") {
+            ; Last profile deleted - recreate an empty Default profile
+            switchTo := DefaultProfile
+            section := GetProfileSection("radial", switchTo)
+            IniWrite(switchTo, ProfilesIniPath, section, "Name")
+            IniWrite("", ProfilesIniPath, section, "ActiveList")
+        } else {
+            try {
+                data := IniRead(GetRadialProfileIniPath(switchTo), GetProfileSection("radial", switchTo), "ActiveList", "")
+                if data != "" {
+                    for id in StrSplit(data, ",") {
+                        id := Trim(id)
+                        if id != "" && Stratagems.Has(id)
+                            ActiveStratagems.Push(id)
+                    }
+                }
+            } catch {
+            }
+        }
+        
+        ActiveProfile := switchTo
+        IniWrite(ActiveProfile, IniPath, "Settings", "ActiveProfile")
+        ClearBitmapCache()
+        InvalidateRadialCache()
         
         ; Refresh the dropdown and list
         ProfileDDL.Delete()
@@ -1584,7 +1762,155 @@ GetProfilePrefix(profileType) {
     return profileType = "keybind" ? "KeybindProfile_" : "Profile_"
 }
 
+; Rename the currently active profile (works for the Default profile too)
+RenameProfile(profileType := "radial") {
+    global IniPath, ProfilesIniPath, DefaultProfile
+    
+    if (profileType = "keybind") {
+        global ActiveKeybindProfile, ActiveKeybindStratagems, StratagemKeybinds, keybindProfileDDL
+        oldName := ActiveKeybindProfile
+        title := Lang.Get("rename_keybind_profile_title")
+    }
+    else {
+        global ActiveProfile, ActiveStratagems, ProfileDDL
+        oldName := ActiveProfile
+        title := Lang.Get("rename_profile_title")
+    }
+    
+    SwitchToEnglishLayout()
+    IB := InputBox(Lang.Get("enter_new_profile_name"), title, "w300 h130", oldName)
+    if (IB.Result = "Cancel")
+        return
+    
+    newName := Trim(IB.Value)
+    if (newName = "" || newName = oldName)
+        return
+    
+    ; Check for duplicate names
+    for name in GetProfilesList(profileType) {
+        if (name = newName) {
+            MsgBox(Lang.Get("profile_name_exists"), Lang.Get("error_title"), 0x10)
+            return
+        }
+    }
+    
+    if (profileType = "keybind") {
+        ; Make sure current state is saved before moving it
+        SaveKeybindProfile()
+        
+        oldPath := GetKeybindProfileIniPath(oldName)
+        newPath := GetKeybindProfileIniPath(newName)
+        oldSection := GetProfileSection("keybind", oldName)
+        newSection := GetProfileSection("keybind", newName)
+        CopyIniSection(oldPath, oldSection, newPath, newSection)
+        try IniDelete(oldPath, oldSection)
+        IniWrite(newName, newPath, newSection, "Name")
+        
+        ; Registered hotkeys stay valid - only the profile name changes
+        ActiveKeybindProfile := newName
+        IniWrite(ActiveKeybindProfile, IniPath, "Settings", "ActiveKeybindProfile")
+        
+        ; Refresh the dropdown
+        keybindProfileDDL.Delete()
+        keybindProfileDDL.Add(GetProfilesList("keybind"))
+        SetProfileDDL("keybind")
+        
+        ; Update the floating keybind list overlay so its title shows the new profile name
+        RefreshKeybindListIfVisible()
+        
+        ToolTip(Lang.Get("keybind_profile_rename_success") . " " . ActiveKeybindProfile, 5, 5)
+        SetTimer(RemoveToolTip, -1000)
+    }
+    else {
+        ; Make sure current state is saved before moving it
+        SaveProfiles()
+        
+        oldPath := GetRadialProfileIniPath(oldName)
+        newPath := GetRadialProfileIniPath(newName)
+        oldSection := GetProfileSection("radial", oldName)
+        newSection := GetProfileSection("radial", newName)
+        CopyIniSection(oldPath, oldSection, newPath, newSection)
+        try IniDelete(oldPath, oldSection)
+        IniWrite(newName, newPath, newSection, "Name")
+        
+        ActiveProfile := newName
+        IniWrite(ActiveProfile, IniPath, "Settings", "ActiveProfile")
+        
+        ; Refresh the dropdown
+        ProfileDDL.Delete()
+        ProfileDDL.Add(GetProfilesList("radial"))
+        SetProfileDDL("radial")
+        
+        ToolTip(Lang.Get("profile_rename_success") . " " . ActiveProfile, 5, 5)
+        SetTimer(RemoveToolTip, -1000)
+    }
+}
+
+; Copy all key=value pairs of one INI section to another section (used by rename)
+CopyIniSection(srcPath, srcSection, dstPath, dstSection) {
+    if !FileExist(srcPath)
+        return false
+    try fileContent := FileRead(srcPath, "UTF-8")
+    catch
+        return false
+    
+    srcSectionLower := StrLower(srcSection)
+    inSection := false
+    for line in StrSplit(fileContent, "`n", "`r") {
+        line := Trim(line)
+        if (line = "" || SubStr(line, 1, 1) = ";")
+            continue
+        if (SubStr(line, 1, 1) = "[") {
+            if (inSection)
+                break  ; reached the next section
+            if (StrLower(SubStr(line, 2, -1)) = srcSectionLower)
+                inSection := true
+            continue
+        }
+        if (inSection) {
+            eqPos := InStr(line, "=")
+            if (eqPos > 0) {
+                key := Trim(SubStr(line, 1, eqPos - 1))
+                val := SubStr(line, eqPos + 1)
+                if (key != "")
+                    IniWrite(val, dstPath, dstSection, key)
+            }
+        }
+    }
+    return true
+}
+
+; The special characters for profile names are encoded
+EncodeProfileName(name) {
+    s := StrReplace(name, "%", "%25")
+    s := StrReplace(s, "[", "%5B")
+    s := StrReplace(s, "]", "%5D")
+    s := StrReplace(s, "`r", "%0D")
+    s := StrReplace(s, "`n", "%0A")
+    return s
+}
+
+DecodeProfileName(token) {
+    s := StrReplace(token, "%5B", "[")
+    s := StrReplace(s, "%5D", "]")
+    s := StrReplace(s, "%0D", "`r")
+    s := StrReplace(s, "%0A", "`n")
+    s := StrReplace(s, "%25", "%")
+    return s
+}
+
+; Build the INI section header for a profile (encoded so it is always valid)
+GetProfileSection(profileType, profileName) {
+    return GetProfilePrefix(profileType) . EncodeProfileName(profileName)
+}
+
 GetRadialProfileIniPath(profileName) {
+    global ProfilesIniPath, OCRProfileIniPath
+    return (profileName = "OCR") ? OCRProfileIniPath : ProfilesIniPath
+}
+
+; Keybind profiles: the dedicated "OCR" keybind profile lives in ocr.ini
+GetKeybindProfileIniPath(profileName) {
     global ProfilesIniPath, OCRProfileIniPath
     return (profileName = "OCR") ? OCRProfileIniPath : ProfilesIniPath
 }
@@ -1596,6 +1922,8 @@ CreateRadialProfileHandler(*) => CreateProfile("radial")
 CreateKeybindProfileHandler(*) => CreateProfile("keybind")
 DeleteRadialProfileHandler(*) => DeleteProfile("radial")
 DeleteKeybindProfileHandler(*) => DeleteProfile("keybind")
+RenameRadialProfileHandler(*) => RenameProfile("radial")
+RenameKeybindProfileHandler(*) => RenameProfile("keybind")
 
 RemoveToolTip() {
     ToolTip()
@@ -1809,13 +2137,459 @@ UpdateHelpText() {
     global helpText1, RadialMenuKey, DisplayToggleHotkey
     radialKey := RadialMenuKey != "" ? RadialMenuKey : Lang.Get("not_set")
     toggleKey := DisplayToggleHotkey != "" ? DisplayToggleHotkey : Lang.Get("not_set")
-    helpText1.Value := radialKey " - " Lang.Get("radial_menu_key_help") " | " toggleKey " - " Lang.Get("show_hide_gui_help")
+    helpText1.Value := radialKey " - " Lang.Get("radial_menu_key_help") " | " toggleKey " - " Lang.Get("show_gui_help")
 }
 
 UpdateHelpText2() {
     global helpText2, KeybindListHotkey
     listKey := KeybindListHotkey != "" ? KeybindListHotkey : Lang.Get("not_set")
     helpText2.Value := listKey " - " Lang.Get("floating_list_help")
+}
+
+; --- Keybindings OCR popup ---
+ShowKeybindOCRSpecPopup(*) {
+    global settingsGui, kocrGui, KOCRHotkey, KOCRHotkeyWildcard, KOCRKeys, kocrInputs, kocrHotkeyInput
+    global KOCRMatchHotkey, KOCRMatchHotkeyWildcard, kocrMatchHotkeyInput
+
+    if IsSet(kocrGui) && kocrGui {
+        try {
+            if WinExist("ahk_id " kocrGui.Hwnd) {
+                kocrGui.Show()
+                return
+            }
+        } catch {
+            ; Window was destroyed - clear stale reference
+        }
+        kocrGui := 0
+    }
+
+    SwitchToEnglishLayout()
+    kocrGui := Gui("-Caption +LastFound +Owner" settingsGui.Hwnd, Lang.Get("kocr_title"))
+    kocrGui.BackColor := "202020"
+    kocrGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
+    kocrGui.MarginX := Scale(5)
+    kocrGui.MarginY := Scale(5)
+    kocrGui.OnEvent("Close", (*) => KOCR_CloseGui())
+    kocrGui.OnEvent("Escape", (*) => KOCR_CloseGui())
+
+    ; Title bar (draggable)
+    kocrGui.SetFont("cFFFFFF s" Scale(12))
+    kocrGui.Add("Text", "x0 y0 w" Scale(365) " h" Scale(30) " Background2A2A2A Border +Center", Lang.Get("kocr_title")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    kocrGui.Add("Button", "x+5 y0 w" Scale(30) " h" Scale(30), "X").OnEvent("Click", (*) => KOCR_CloseGui())
+    kocrGui.SetFont("s" Scale(10) " cC4C4C4")
+
+    ; --- Two columns: Stratagem Slots (left) and Mission Stratagems (right) ---
+    slotLabels := [
+        ["s1", Lang.Get("kocr_strat") " 1:"],
+        ["s2", Lang.Get("kocr_strat") " 2:"],
+        ["s3", Lang.Get("kocr_strat") " 3:"],
+        ["s4", Lang.Get("kocr_strat") " 4:"],
+        ["s5", Lang.Get("kocr_extra")]
+    ]
+    missionLabels := [
+        ["reinforce", Lang.Get("kocr_reinforce")],
+        ["resupply", Lang.Get("kocr_resupply")],
+        ["objective", Lang.Get("kocr_objective")],
+        ["eagle", Lang.Get("kocr_eagle")],
+        ["seaf", Lang.Get("kocr_seaf")],
+        ["sos", Lang.Get("kocr_sos")]
+    ]
+
+    colLeftX := 15
+    colRightX := 210
+    colLabelW := 180
+    rowStep := 72
+
+    ; Both columns start at the top (below the title bar)
+    slotSectY := 45
+    slotRowStartY := 70
+
+    missionSectY := 45
+    missionRowStartY := 70
+
+    kocrGui.Add("Text", "x" Scale(colLeftX) " y" Scale(slotSectY) " w" Scale(colLabelW) " cFFD700", Lang.Get("kocr_slots"))
+    kocrGui.Add("Text", "x" Scale(colRightX) " y" Scale(missionSectY) " w" Scale(colLabelW) " cFFD700", Lang.Get("kocr_mission"))
+
+    kocrInputs := Map()
+
+    ; Left column rows
+    for item in slotLabels {
+        idx := A_Index
+        keyName := item[1]
+        storedKey := KOCRKeys[keyName]
+        rowY := slotRowStartY + (idx - 1) * rowStep
+        kocrGui.Add("Text", "x" Scale(colLeftX) " y" Scale(rowY) " w" Scale(colLabelW), item[2])
+        kocrInputs[keyName] := HotkeyInput(kocrGui, colLeftX, rowY + 18, "", {value: StripWildcard(storedKey), wildcard: (SubStr(storedKey, 1, 1) = "*"), hasWildcard: true})
+    }
+
+    ; Right column rows
+    for item in missionLabels {
+        idx := A_Index
+        keyName := item[1]
+        storedKey := KOCRKeys[keyName]
+        rowY := missionRowStartY + (idx - 1) * rowStep
+        kocrGui.Add("Text", "x" Scale(colRightX) " y" Scale(rowY) " w" Scale(colLabelW), item[2])
+        kocrInputs[keyName] := HotkeyInput(kocrGui, colRightX, rowY + 18, "", {value: StripWildcard(storedKey), wildcard: (SubStr(storedKey, 1, 1) = "*"), hasWildcard: true})
+    }
+
+    ; Trigger hotkey (scans and builds the dedicated OCR keybind profile) - left column
+    bottomY := Max(slotRowStartY + slotLabels.Length * rowStep, missionRowStartY + missionLabels.Length * rowStep)
+    hotkeyY := bottomY + 5
+    kocrGui.Add("Text", "x" Scale(colLeftX) " y" Scale(hotkeyY) " w" Scale(colLabelW) " cFFD700", Lang.Get("kocr_hotkey"))
+    kocrHotkeyInput := HotkeyInput(kocrGui, colLeftX, hotkeyY + 22, "", {value: KOCRHotkey, wildcard: KOCRHotkeyWildcard, hasWildcard: true})
+
+    ; Match hotkey (scans and remembers rows for the CURRENT active keybind profile)
+    kocrGui.Add("Text", "x" Scale(colRightX) " y" Scale(hotkeyY) " w" Scale(colLabelW) " cFFD700", Lang.Get("kocr_match_hotkey"))
+    kocrMatchHotkeyInput := HotkeyInput(kocrGui, colRightX, hotkeyY + 22, "", {value: KOCRMatchHotkey, wildcard: KOCRMatchHotkeyWildcard, hasWildcard: true})
+
+    ; Buttons - Save and Close (manually centered; window client width is 400px at 100% scale)
+    btnWpx := Scale(150)
+    btnGappx := Scale(10)
+    btnSaveX := (Scale(400) - (btnWpx * 2 + btnGappx)) // 2
+    btnCloseX := btnSaveX + btnWpx + btnGappx
+
+    hkCtrl := kocrMatchHotkeyInput.controls.hotkey
+    hkCtrl.GetPos(&hkX, &hkY, &hkW, &hkH)
+    btnYpx := hkY + hkH + Scale(15)
+
+    btnSaveClose := kocrGui.Add("Button", "x" btnSaveX " y" btnYpx " w" btnWpx " h" Scale(30), Lang.Get("save"))
+    btnSaveClose.OnEvent("Click", (*) => KOCRSaveAndClose())
+
+    btnClose := kocrGui.Add("Button", "x" btnCloseX " y" btnYpx " w" btnWpx " h" Scale(30), Lang.Get("kocr_close"))
+    btnClose.OnEvent("Click", (*) => KOCR_CloseGui())
+
+    ; AutoSize makes the window fit its content at any GUI scale
+    kocrGui.Show("AutoSize")
+}
+
+; Collects all values from the Keybindings OCR popup into the global state
+KOCR_ReadPopupValues() {
+    global KOCRHotkey, KOCRHotkeyWildcard, KOCRKeys, kocrHotkeyInput, kocrInputs
+    global KOCRMatchHotkey, KOCRMatchHotkeyWildcard, kocrMatchHotkeyInput
+
+    if IsSet(kocrHotkeyInput) && IsObject(kocrHotkeyInput) && kocrHotkeyInput != 0 {
+        KOCRHotkey := kocrHotkeyInput.GetValue()
+        KOCRHotkeyWildcard := kocrHotkeyInput.GetWildcard()
+    }
+    if IsSet(kocrMatchHotkeyInput) && IsObject(kocrMatchHotkeyInput) && kocrMatchHotkeyInput != 0 {
+        KOCRMatchHotkey := kocrMatchHotkeyInput.GetValue()
+        KOCRMatchHotkeyWildcard := kocrMatchHotkeyInput.GetWildcard()
+    }
+    if IsSet(kocrInputs) && IsObject(kocrInputs) {
+        for keyName, ctrl in kocrInputs {
+            val := ctrl.GetValue()
+            if (val != "" && ctrl.GetWildcard())
+                val := "*" . val
+            KOCRKeys[keyName] := val
+        }
+    }
+}
+
+; Persist popup values and re-register the trigger hotkeys
+KOCR_ApplySettings() {
+    KOCR_ReadPopupValues()
+    SaveSettings()
+    SetKOCRHotkey()
+    SetKOCRMatchHotkey()
+}
+
+KOCRSaveAndClose(*) {
+    KOCR_ApplySettings()
+    KOCR_CloseGui()
+}
+
+; Safely destroy the Keybindings OCR popup and clear the stale global reference
+KOCR_CloseGui(*) {
+    global kocrGui
+    if IsSet(kocrGui) && kocrGui {
+        try kocrGui.Destroy()
+    }
+    kocrGui := 0
+}
+
+; Register the Keybindings OCR trigger hotkey
+SetKOCRHotkey() {
+    global KOCRHotkey, KOCRHotkeyWildcard
+    opts := KOCRHotkeyWildcard ? "W" : ""
+    RegisterSimpleHotkey(KOCRHotkey, KOCRScanAndAssign, "KeybindOCR", opts)
+}
+
+; Register the Keybindings OCR "match active profile" hotkey
+SetKOCRMatchHotkey() {
+    global KOCRMatchHotkey, KOCRMatchHotkeyWildcard
+    opts := KOCRMatchHotkeyWildcard ? "W" : ""
+    RegisterSimpleHotkey(KOCRMatchHotkey, KOCRMatchActiveProfile, "KeybindOCRMatch", opts)
+}
+
+; Scans the in-game stratagem menu and remembers each stratagems row for the active keybind profile, enabling Scrambler Bypass to execute its live arrow sequence via the stratagems keybind
+KOCRMatchActiveProfile(*) {
+    global StratagemMenuKey, MenuInputType, MenuOpenDelay
+    global ActiveKeybindStratagems, KeybindStratagemRows
+    global IsExecutingMacro
+
+    if IsExecutingMacro
+        return
+
+    ; Open the stratagem menu so arrows are visible to OCR
+    if (StratagemMenuKey != "") {
+        ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
+        Sleep(MenuOpenDelay)
+    }
+
+    found := []
+    try {
+        found := ScanAllStratagems()
+    } finally {
+        if (StratagemMenuKey != "") {
+            if (MenuInputType = 5) {
+                ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
+            } else {
+                Sleep(25)
+                ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
+                Sleep(25)
+                ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
+            }
+        }
+    }
+
+    if (found.Length = 0) {
+        ToolTip(Lang.Get("kocr_no_stratagems"), 5, 5)
+        SetTimer(RemoveToolTip, -1500)
+        return
+    }
+
+    ; Build the detected id -> row map (first occurrence wins)
+    detectedRows := Map()
+    for strat in found {
+        if (strat.id != "unknown" && !detectedRows.Has(strat.id))
+            detectedRows[strat.id] := strat.row
+    }
+    ; Reinforce is always on the first visible stratagem row.
+    detectedRows["reinforce"] := 1
+
+    ; Remember rows only for stratagems present in the active keybind profile
+    KeybindStratagemRows := Map()
+    matched := 0
+    for id in ActiveKeybindStratagems {
+        if detectedRows.Has(id) {
+            KeybindStratagemRows[id] := detectedRows[id]
+            matched++
+        }
+    }
+    ; Reinforce is always available so it can be triggered in bypass mode
+    KeybindStratagemRows["reinforce"] := 1
+
+    if (matched = 0) {
+        ToolTip(Lang.Get("tooltip_kocr_match_no_profile"), 5, 5)
+        SetTimer(RemoveToolTip, -1800)
+        return
+    }
+
+    ToolTip(Lang.Get("tooltip_kocr_match_done") . " " . matched, 5, 5)
+    SetTimer(RemoveToolTip, -1500)
+}
+
+; Returns true when the stratagem belongs to the Mission category
+KOCR_IsMission(id) {
+    global StratagemSections
+    if !IsSet(StratagemSections) || !StratagemSections.Has(id)
+        return false
+    sec := StratagemSections[id]
+    return (InStr(sec, "Mission") || InStr(sec, "Задания"))
+}
+
+; Scans the in-game stratagem menu and assigns the configured hotkeys.
+; - The last 4 detected stratagems become slots 1-4.
+; - The next detected stratagem that is NOT from the mission category becomes the extra 5th stratagem.
+; - Reinforce / Resupply / Objective / SEAF Artillery are always assigned.
+; - Eagle Re-arm is only assigned when an Eagle stratagem was found among the 1-5 stratagems.
+KOCRScanAndAssign(*) {
+    global StratagemMenuKey, MenuInputType, MenuOpenDelay
+    global KOCRKeys, StratagemKeybinds, ActiveKeybindStratagems, ActiveKeybindProfile
+    global IniPath, keybindProfileDDL
+    global IsExecutingMacro
+    global KeybindStratagemRows
+
+    if IsExecutingMacro
+        return
+
+    ; Open the stratagem menu so arrows are visible to OCR
+    if (StratagemMenuKey != "") {
+        ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
+        Sleep(MenuOpenDelay)
+    }
+
+    found := []
+    try {
+        found := ScanAllStratagems()
+    } finally {
+        if (StratagemMenuKey != "") {
+            if (MenuInputType = 5) {
+                ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
+            } else {
+                Sleep(25)
+                ExecuteKeyInput(StratagemMenuKey, MenuInputType, "down")
+                Sleep(25)
+                ExecuteKeyInput(StratagemMenuKey, MenuInputType, "up")
+            }
+        }
+    }
+
+    ; Keep only successfully identified stratagems
+    known := []
+    for strat in found {
+        if (strat.id != "unknown")
+            known.Push(strat)
+    }
+
+    if (known.Length = 0) {
+        ToolTip(Lang.Get("kocr_no_stratagems"), 5, 5)
+        SetTimer(RemoveToolTip, -1500)
+        return
+    }
+
+    ; Sort by row ascending (top of the menu first) - simple bubble sort
+    n := known.Length
+    Loop n - 1 {
+        Loop n - A_Index {
+            j := A_Index
+            if (known[j].row > known[j+1].row) {
+                tmp := known[j]
+                known[j] := known[j+1]
+                known[j+1] := tmp
+            }
+        }
+    }
+
+    ; Remember each stratagems detected row so RunMacro can read and execute its live arrow sequence when its keybind is triggered with Scrambler Bypass enabled
+    KeybindStratagemRows := Map()
+    for strat in known
+        KeybindStratagemRows[strat.id] := strat.row
+    ; Reinforce is always on the first visible stratagem row.
+    KeybindStratagemRows["reinforce"] := 1
+
+    ; Build the map of id -> key to assign, plus an ordered list that matches the intended slot order (slots 1-4, extra 5, then mission stratagems).
+    assignments := Map()
+    orderedIDs := []
+    AddAssignment := (id, key) => (assignments[id] := key, orderedIDs.Push(id))
+
+    ; Last (bottom) up to 4 stratagems -> slots 1-4 (moving from down to up)
+    total := known.Length
+    lastCount := Min(4, total)
+    lastFour := []
+    Loop lastCount
+        lastFour.Push(known[total - lastCount + A_Index])
+
+    ; Assign slots 1-4 from top to down (topmost of the last four -> slot 1)
+    slotIndex := 1
+    for strat in lastFour {
+        if (slotIndex > 4)
+            break
+        keyName := "s" slotIndex
+        if (KOCRKeys[keyName] != "")
+            AddAssignment(strat.id, KOCRKeys[keyName])
+        slotIndex++
+    }
+
+    ; Extra 5: any remaining stratagem that is not from the mission category. Scan the remaining stratagems from down to top
+    mainIDs := Map()
+    for strat in lastFour
+        mainIDs[strat.id] := true
+
+    if (KOCRKeys["s5"] != "") {
+        idx := known.Length
+        while (idx >= 1) {
+            strat := known[idx]
+            idx--
+            if mainIDs.Has(strat.id)
+                continue
+            if KOCR_IsMission(strat.id)
+                continue
+            AddAssignment(strat.id, KOCRKeys["s5"])
+            break
+        }
+    }
+
+    ; Mission stratagems. Reinforce, Resupply, Objective and SEAF Artillery are ALWAYS added (even if the scan did not detect them). SOS Beacon is added only when it was actually detected.
+    ; Fixed order: Reinforce, Resupply, Objective, SEAF Artillery, SOS.
+    missionOrder := [
+        ["reinforce", "reinforce", true],
+        ["resupply", "resupply", true],
+        ["ocr_objective", "objective", true],
+        ["seaf_artillery", "seaf", true],
+        ["sos_beacon", "sos", false]
+    ]
+    for item in missionOrder {
+        stratId := item[1]
+        keyName := item[2]
+        alwaysAdd := item[3]
+        if (KOCRKeys[keyName] = "")
+            continue
+        if (alwaysAdd) {
+            AddAssignment(stratId, KOCRKeys[keyName])
+            continue
+        }
+        for strat in known {
+            if (strat.id = stratId) {
+                AddAssignment(stratId, KOCRKeys[keyName])
+                break
+            }
+        }
+    }
+
+    ; Eagle Re-arm only if an Eagle stratagem was found in the 4 or extra 5
+    eagleFoundInSlots := false
+    for id, key in assignments {
+        if (SubStr(id, 1, 6) = "eagle_") {
+            eagleFoundInSlots := true
+            break
+        }
+    }
+    if (eagleFoundInSlots && KOCRKeys["eagle"] != "")
+        AddAssignment("eagle_re_arm", KOCRKeys["eagle"])
+
+    if (assignments.Count = 0) {
+        ToolTip(Lang.Get("kocr_no_stratagems"), 5, 5)
+        SetTimer(RemoveToolTip, -1500)
+        return
+    }
+
+    ; Save the current keybind profile before switching away from it
+    SaveKeybindProfile()
+
+    ; Unregister all current keybind hotkeys (they belong to the previous profile)
+    for id in StratagemKeybinds
+        UnregisterStratagemHotkey(id)
+
+    ; Create/switch to the dedicated "OCR" keybind profile and fill it fresh on every scan
+    ActiveKeybindProfile := "OCR"
+    StratagemKeybinds := Map()
+    ActiveKeybindStratagems := []
+
+    assignedCount := 0
+    for id in orderedIDs {
+        key := assignments[id]
+        ActiveKeybindStratagems.Push(id)
+        StratagemKeybinds[id] := key
+        RegisterStratagemHotkey(id, key)
+        assignedCount++
+    }
+
+    ; Persist the OCR profile and remember it as the active keybind profile
+    SaveKeybindProfile()
+    IniWrite(ActiveKeybindProfile, IniPath, "Settings", "ActiveKeybindProfile")
+
+    ; Refresh the keybind profile dropdown and the keybinds list
+    try {
+        keybindProfileDDL.Delete()
+        keybindProfileDDL.Add(GetProfilesList("keybind"))
+    } catch {
+    }
+    SetProfileDDL("keybind")
+    UpdateKeybindsList()
+
+    ToolTip(Lang.Get("kocr_done") . " " . assignedCount, 5, 5)
+    SetTimer(RemoveToolTip, -1500)
 }
 
 UpdateHelpTextOCR() {
@@ -1865,6 +2639,8 @@ UpdateShowText(*) {
     InvalidateRadialCache()
     SaveSettings()
 }
+
+; Cooldown + Eagle functions are defined in Config\cooldowns.ahk
 
 UpdateGUIScale(*) {
     global GUIScale, guiScaleDDL
@@ -2491,10 +3267,7 @@ OCRAnalyzeAndSwitchProfile(*) {
 
 ToggleSettingsGui(*) {
     global settingsGui
-    if (DllCall("IsWindowVisible", "Ptr", settingsGui.Hwnd))
-        settingsGui.Hide()
-    else
-        settingsGui.Show()
+    settingsGui.Show()
 }
 
 global LastDrawnSector := -1
@@ -2537,10 +3310,15 @@ WatchMouse() {
             newSector := 1
     }
     
-    ; Redraw if forced, sector changed, or mouse moved significantly
+    ; Keep active cooldown countdowns ticking even when the mouse stays still
+    RequestCooldownRadialRedraw()
+
+    ; Redraw if forced, sector changed, mouse moved, or a cooldown refresh is due
     if (ForceRadialRedraw || newSector != LastDrawnSector || Abs(mx - LastDrawnMX) > 3 || Abs(my - LastDrawnMY) > 3) {
-        if IsSet(radialGui)
+        if IsSet(radialGui) {
             DrawRadial(ScreenCX, ScreenCY, mx, my, newSector)
+            RecordCooldownRadialRedraw()
+        }
         LastDrawnSector := newSector
         LastDrawnMX := mx
         LastDrawnMY := my
@@ -2671,7 +3449,9 @@ CreateStaticBackground() {
 
         stratID := ActiveStratagems[A_Index]
         iconPath := FindIconPath(stratID)
-        
+        ; Fallback bottom edge of the icon (used when no icon is drawn)
+        iconBottomY := ty - 15 + IconSize / 2
+
         ; Draw cached bitmap
         if (iconPath != "") {
             pBitmap := GetCachedBitmap(iconPath)
@@ -2682,14 +3462,18 @@ CreateStaticBackground() {
                 iw := Round(origW * scale)
                 ih := Round(origH * scale)
                 Gdip_DrawImage(pGraphics, pBitmap, tx - (iw/2), ty - (ih/2) - 15, iw, ih)
+                ; Icon is centered at (ty - 15); track its actual drawn bottom edge
+                iconBottomY := ty - 15 + ih / 2
             }
         }
 
-        ; Draw text (if enabled)
+        ; Draw text (if enabled). The layout box is tall enough for up to 3 wrapped rows. Its top edge is anchored just below the icon so the text follows the icon whenever the icon size changes.
         if (ShowText) {
-            name := StratagemNames[stratID]
+            name := StratagemNames[stratID] . GetEagleUsesLabel(stratID)
             RectF := Buffer(16)
-            NumPut("Float", tx-60, "Float", ty+15, "Float", 120, "Float", 20, RectF)
+            textBoxH := Round(TextSize * 3.5) + 6
+            textTopY := iconBottomY + 6
+            NumPut("Float", tx-60, "Float", textTopY, "Float", 120, "Float", textBoxH, RectF)
             DllCall("gdiplus\GdipDrawString", "Ptr", pGraphics, "WStr", name, "Int", -1, "Ptr", Radial_hFont, "Ptr", RectF, "Ptr", Radial_hFormat, "Ptr", Radial_pBrushText)
         }
     }
@@ -2759,7 +3543,9 @@ DrawRadial(cx, cy, mx, my, current) {
 
         stratID := ActiveStratagems[current]
         iconPath := FindIconPath(stratID)
-        
+        ; Fallback bottom edge of the icon (used when no icon is drawn)
+        iconBottomY := ty - 15 + IconSize / 2
+
         if (iconPath != "") {
             pBitmap := GetCachedBitmap(iconPath)
             if pBitmap {
@@ -2769,17 +3555,25 @@ DrawRadial(cx, cy, mx, my, current) {
                 iw := Round(origW * scale)
                 ih := Round(origH * scale)
                 Gdip_DrawImage(pGraphics, pBitmap, tx - (iw/2), ty - (ih/2) - 15, iw, ih)
+                ; Icon is centered at (ty - 15); track its actual drawn bottom edge
+                iconBottomY := ty - 15 + ih / 2
             }
         }
 
-        ; Draw text for highlighted sector (if enabled)
+        ; Draw text for highlighted sector (if enabled). Same 3-row tall box as the static background, anchored just below the icon so it follows the icon whenever the icon size changes.
         if (ShowText) {
-            name := StratagemNames[stratID]
+            name := StratagemNames[stratID] . GetEagleUsesLabel(stratID)
             RectF := Buffer(16)
-            NumPut("Float", tx-60, "Float", ty+15, "Float", 120, "Float", 20, RectF)
+            textBoxH := Round(TextSize * 3.5) + 6
+            textTopY := iconBottomY + 6
+            NumPut("Float", tx-60, "Float", textTopY, "Float", 120, "Float", textBoxH, RectF)
             DllCall("gdiplus\GdipDrawString", "Ptr", pGraphics, "WStr", name, "Int", -1, "Ptr", Radial_hFont, "Ptr", RectF, "Ptr", Radial_hFormat, "Ptr", Radial_pBrushText)
         }
     }
+
+    ; Draw cooldown overlays (dark tint + remaining seconds) for stratagems on cooldown
+    if (CooldownsEnabled && HasAnyActiveCooldown())
+        DrawCooldownOverlays(pGraphics, count, sectorAngle, mid)
 
     ; Draw cursor line and dot
     Gdip_DrawLine(pGraphics, Radial_pPenLine, mid, mid, mx-cx+mid, my-cy+mid)
@@ -2978,15 +3772,19 @@ ResolveExecutionSequence(id) {
 }
 
 ResolveBypassSequence(id) {
-    global OCRScramblerBypassEnabled, OCR_DetectedRowsMap
+    global OCRScramblerBypassEnabled, OCR_DetectedRowsMap, KeybindStratagemRows
 
     if (!OCRScramblerBypassEnabled)
         return ""
 
-    if (!IsObject(OCR_DetectedRowsMap) || !OCR_DetectedRowsMap.Has(id))
-        return ""
+    row := 0
 
-    row := OCR_DetectedRowsMap[id]
+    ; Prefer rows remembered by the Keybindings OCR scan so keybind triggers work in Scrambler Bypass even when only the keybind scan was performed
+    if (IsObject(KeybindStratagemRows) && KeybindStratagemRows.Has(id))
+        row := KeybindStratagemRows[id]
+    else if (IsObject(OCR_DetectedRowsMap) && OCR_DetectedRowsMap.Has(id))
+        row := OCR_DetectedRowsMap[id]
+
     if (row < 1)
         return ""
 
@@ -3019,10 +3817,16 @@ RunMacro(id) {
     if !Stratagems.Has(id) 
         return
 
+    if (!OCRScramblerBypassEnabled && IsStratagemCallBlocked(id))
+        return
+
     if IsExecutingMacro
         return
 
     IsExecutingMacro := true
+
+    ; Calling another stratagem cancels any pending deployment confirmation
+    CancelPendingDeployment()
 
     try {
         sequence := ""
@@ -3076,6 +3880,9 @@ RunMacro(id) {
             return
 
         ExecuteSequence(sequence)
+        ; Cooldown tracking is intentionally disabled while Scrambler Bypass is active.
+        if (!OCRScramblerBypassEnabled)
+            CooldownArmFor(id)
     } finally {
         ; Always release hold key
         if (menuWasOpened && MenuInputType = 5)
@@ -3360,6 +4167,7 @@ UpdateStatusIndicator() {
         if (IsSet(KeybindListGui) && KeybindListGui && WinExist("ahk_id " KeybindListGui.Hwnd) && DllCall("IsWindowVisible", "Ptr", KeybindListGui.Hwnd)) {
             KeybindListWasVisibleBeforeSuspend := true
             KeybindListGui.Hide()
+            SetTimer(KeybindListRefreshTick, 0)
         } else {
             KeybindListWasVisibleBeforeSuspend := false
         }
@@ -3455,6 +4263,16 @@ EndCameraBypass(skipRMB := false) {
 ; --- FAVORITES FUNCTIONS ---
 IsFavorite(id) => FavoriteStratagems.Has(id)
 
+; Handles right-click on the stratagem list: toggles favorite for the clicked item
+FavoriteOnContextMenu(ctrl, item, *) {
+    if (item < 1)
+        return
+    ; Select the right-clicked item so ToggleFavorite operates on it
+    lbAvailable.Modify(0, "-Select")
+    lbAvailable.Modify(item, "Select Vis")
+    ToggleFavorite()
+}
+
 ToggleFavorite(*) {
     global lbAvailable, FavoriteStratagems
     
@@ -3536,31 +4354,36 @@ SelectAllAvailable(*) {
 ; Note: Profile switching uses universal SwitchProfile("keybind"), CreateProfile("keybind"), DeleteProfile("keybind")
 
 SaveKeybindProfile() {
-    global ActiveKeybindProfile, ActiveKeybindStratagems, StratagemKeybinds, ProfilesIniPath
+    global ActiveKeybindProfile, ActiveKeybindStratagems, StratagemKeybinds
     
-    section := "KeybindProfile_" . ActiveKeybindProfile
+    section := GetProfileSection("keybind", ActiveKeybindProfile)
+    kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
+    
+    ; Keep the display name in the section so the profile list shows the real name
+    IniWrite(ActiveKeybindProfile, kbProfileIniPath, section, "Name")
     
     ; Save stratagems list
     str := ""
     for id in ActiveKeybindStratagems
         str .= id ","
-    IniWrite(RTrim(str, ","), ProfilesIniPath, section, "ActiveList")
+    IniWrite(RTrim(str, ","), kbProfileIniPath, section, "ActiveList")
     
     ; Save hotkeys as individual keys in the section
     for id, hk in StratagemKeybinds {
         if (hk != "")
-            IniWrite(hk, ProfilesIniPath, section, id)
+            IniWrite(hk, kbProfileIniPath, section, id)
     }
 }
 
 LoadKeybindProfileData() {
-    global ActiveKeybindProfile, ActiveKeybindStratagems, StratagemKeybinds, ProfilesIniPath
+    global ActiveKeybindProfile, ActiveKeybindStratagems, StratagemKeybinds
     
-    section := "KeybindProfile_" . ActiveKeybindProfile
+    section := GetProfileSection("keybind", ActiveKeybindProfile)
+    kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
     
     try {
         ; Load stratagems list
-        data := IniRead(ProfilesIniPath, section, "ActiveList", "")
+        data := IniRead(kbProfileIniPath, section, "ActiveList", "")
         if data != "" {
             for id in StrSplit(data, ",") {
                 id := Trim(id)
@@ -3572,7 +4395,7 @@ LoadKeybindProfileData() {
         ; Load hotkeys as individual keys from the section
         for id in ActiveKeybindStratagems {
             try {
-                hk := IniRead(ProfilesIniPath, section, id, "")
+                hk := IniRead(kbProfileIniPath, section, id, "")
                 if (hk != "") {
                     StratagemKeybinds[id] := hk
                     RegisterStratagemHotkey(id, hk)
@@ -3657,7 +4480,8 @@ RemoveFromKeybinds(*) {
     if (selectedRows.Length == 0)
         return
     
-    section := "KeybindProfile_" . ActiveKeybindProfile
+    section := GetProfileSection("keybind", ActiveKeybindProfile)
+    kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
     
     ; Remove from end to preserve indices
     i := selectedRows.Length
@@ -3671,7 +4495,7 @@ RemoveFromKeybinds(*) {
                 StratagemKeybinds.Delete(id)
             ; Delete hotkey from INI
             try {
-                IniDelete(ProfilesIniPath, section, id)
+                IniDelete(kbProfileIniPath, section, id)
             }
             ActiveKeybindStratagems.RemoveAt(idx)
         }
@@ -3735,21 +4559,23 @@ ToggleKeybindVisibility(*) {
 }
 
 SaveKeybindVisibility() {
-    global KeybindListVisibility, ProfilesIniPath, ActiveKeybindProfile
+    global KeybindListVisibility, ActiveKeybindProfile
     
-    section := "KeybindProfile_" . ActiveKeybindProfile
+    section := GetProfileSection("keybind", ActiveKeybindProfile)
+    kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
     str := ""
     for id in KeybindListVisibility
         str .= id ","
-    IniWrite(RTrim(str, ","), ProfilesIniPath, section, "Visibility")
+    IniWrite(RTrim(str, ","), kbProfileIniPath, section, "Visibility")
 }
 
 LoadKeybindVisibility() {
-    global KeybindListVisibility, ProfilesIniPath, ActiveKeybindProfile
+    global KeybindListVisibility, ActiveKeybindProfile
     
-    section := "KeybindProfile_" . ActiveKeybindProfile
+    section := GetProfileSection("keybind", ActiveKeybindProfile)
+    kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
     try {
-        data := IniRead(ProfilesIniPath, section, "Visibility", "")
+        data := IniRead(kbProfileIniPath, section, "Visibility", "")
         if data != "" {
             for id in StrSplit(data, ",") {
                 id := Trim(id)
@@ -3862,7 +4688,8 @@ ShowKeybindCapture(*) {
     
     ; Wildcard checkbox
     global hkWildcardCb
-    hkWildcardCb := captureGui.Add("CheckBox", "x+5 yp vhkWildcardCb", "*")
+    hkWildcardCb := AddStandardCheckBox(captureGui, "x+5 yp vhkWildcardCb")
+    captureGui.Add("Text", "x+0 yp", "*")
     ; Check if current hotkey has wildcard prefix
     currentWildcard := false
     if (currentHK != "" && (SubStr(currentHK, 1, 1) = "*" || SubStr(currentHK, 1, 1) = "~")) {
@@ -3891,6 +4718,8 @@ ShowKeybindCapture(*) {
 ; Sync function for keybind capture dialog
 SyncKeybindCaptureInputs(source, choiceDDL, hkCtrl) {
     if (source = "Hotkey") {
+        ; Switch to English keyboard layout when editing the hotkey
+        SwitchToEnglishLayout()
         ; Hotkey control changed - if it has value, set DDL to "[Input]"
         if (hkCtrl.Value != "") {
             choiceDDL.Choose(1)
@@ -3926,7 +4755,8 @@ SaveHotkeyFromCapture(guiCtrl, hkChoiceDDL, hkCtrl, stratID) {
         return
     }
     
-    section := "KeybindProfile_" . ActiveKeybindProfile
+    section := GetProfileSection("keybind", ActiveKeybindProfile)
+    kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
     
     ; Check if this hotkey is already used by another stratagem
     if (newHK != "") {
@@ -3936,7 +4766,7 @@ SaveHotkeyFromCapture(guiCtrl, hkChoiceDDL, hkCtrl, stratID) {
                 UnregisterStratagemHotkey(existingID)
                 StratagemKeybinds.Delete(existingID)
                 try {
-                    IniDelete(ProfilesIniPath, section, existingID)
+                    IniDelete(kbProfileIniPath, section, existingID)
                 }
             }
         }
@@ -3954,7 +4784,7 @@ SaveHotkeyFromCapture(guiCtrl, hkChoiceDDL, hkCtrl, stratID) {
             StratagemKeybinds.Delete(stratID)
         ; Delete hotkey from INI (keep stratagem in ActiveList)
         try {
-            IniDelete(ProfilesIniPath, section, stratID)
+            IniDelete(kbProfileIniPath, section, stratID)
         }
     }
     
@@ -3976,7 +4806,8 @@ ClearSelectedKeybind(*) {
     if (selectedRows.Length == 0)
         return
     
-    section := "KeybindProfile_" . ActiveKeybindProfile
+    section := GetProfileSection("keybind", ActiveKeybindProfile)
+    kbProfileIniPath := GetKeybindProfileIniPath(ActiveKeybindProfile)
     clearedCount := 0
     
     ; Process from end to start to preserve indices
@@ -3991,7 +4822,7 @@ ClearSelectedKeybind(*) {
             StratagemKeybinds.Delete(stratID)
             ; Delete hotkey from INI (keep stratagem in ActiveList)
             try {
-                IniDelete(ProfilesIniPath, section, stratID)
+                IniDelete(kbProfileIniPath, section, stratID)
             }
             clearedCount++
         }
@@ -4011,7 +4842,7 @@ global RegisteredStratagemHotkeys := Map()
 GetReservedHotkeyName(hotkeyStr) {
     global RadialMenuKey, DisplayToggleHotkey
     global SuspendHotkey, ExitHotkey, ProfileNextHotkey, ProfilePrevHotkey
-    global KeybindListHotkey, OCRHotkey, OCRBypassToggleHotkey
+    global KeybindListHotkey, OCRHotkey, OCRBypassToggleHotkey, KOCRHotkey, KOCRMatchHotkey
     global ToggleWeaponHotkey, WeaponAssistHotkey, CycleWeaponModeHotkey, SafetyHotkey
     global ToggleDriverHotkey
     
@@ -4034,6 +4865,8 @@ GetReservedHotkeyName(hotkeyStr) {
         [KeybindListHotkey, "reserved_keybind_list_overlay"],
         [OCRHotkey, "reserved_ocr_scan"],
         [OCRBypassToggleHotkey, "reserved_ocr_bypass_toggle"],
+        [KOCRHotkey, "reserved_keybind_ocr"],
+        [KOCRMatchHotkey, "reserved_keybind_ocr_match"],
         [ToggleWeaponHotkey, "reserved_weapon_assistant_toggle"],
         [WeaponAssistHotkey, "reserved_weapon_assistant_fire"],
         [CycleWeaponModeHotkey, "reserved_weapon_mode_cycle"],
@@ -4121,27 +4954,34 @@ GetShortHotkeyDisplay(hotkey) {
     if (hotkey = "")
         return ""
     
+    ; Strip wildcard/pass-through prefixes (* or ~) so numpad keys are still shortened when a wildcard is enabled. The prefix is re-added afterwards.
+    prefix := ""
+    while (SubStr(hotkey, 1, 1) = "*" || SubStr(hotkey, 1, 1) = "~") {
+        prefix .= SubStr(hotkey, 1, 1)
+        hotkey := SubStr(hotkey, 2)
+    }
+    
     ; Check for Numpad prefix and convert to short format
     if (InStr(hotkey, "Numpad") = 1) {
         suffix := SubStr(hotkey, 7)  ; Get everything after "Numpad"
         ; Map special numpad keys to their symbols
         if (suffix = "Add")
-            return "Num +"
+            return prefix . "Num +"
         else if (suffix = "Sub")
-            return "Num -"
+            return prefix . "Num -"
         else if (suffix = "Mult")
-            return "Num *"
+            return prefix . "Num *"
         else if (suffix = "Div")
-            return "Num /"
+            return prefix . "Num /"
         else if (suffix = "Dot")
-            return "Num ."
+            return prefix . "Num ."
         else if (suffix = "Enter")
-            return "Num Enter"
+            return prefix . "Num Enter"
         else
-            return "Num " . suffix
+            return prefix . "Num " . suffix
     }
     
-    return hotkey
+    return prefix . hotkey
 }
 
 ; --- Общая функция для обновления содержимого списка keybinds ---
@@ -4247,6 +5087,8 @@ UpdateKeybindListContent(lbControl) {
         
         name := StratagemNames.Has(id) ? StratagemNames[id] : id
         hotkey := StratagemKeybinds.Has(id) ? StratagemKeybinds[id] : ""
+        ; Append cooldown timer and/or Eagle uses to the name
+        name .= GetCooldownListSuffix(id)
         
         idx := (IconIndexMap.Has(id) && IconIndexMap[id] > 0) ? IconIndexMap[id] : 1
         ; Only show icon if setting is enabled
@@ -4347,6 +5189,7 @@ KeybindListHandler(*) {
     } else {
         ; Quick tap - hide window
         KeybindListGui.Hide()
+        SetTimer(KeybindListRefreshTick, 0)
     }
 }
 
@@ -4433,6 +5276,41 @@ ShowKeybindList(*) {
     
     ; Ensure E0x20 style is set (click-through)
     WinSetExStyle("+0x20", "ahk_id " KeybindListGui.Hwnd)
+
+    ; Keep cooldown timers ticking only while this list has an active countdown.
+    SyncKeybindListCooldownTimer()
+}
+
+; Synchronize the one-second refresh timer with the floating list's visibility and its own keybind profile
+SyncKeybindListCooldownTimer() {
+    global KeybindListGui
+
+    listIsVisible := IsSet(KeybindListGui) && KeybindListGui
+        && WinExist("ahk_id " KeybindListGui.Hwnd)
+        && DllCall("IsWindowVisible", "Ptr", KeybindListGui.Hwnd)
+
+    if (listIsVisible && HasAnyKeybindCooldownCountdown())
+        SetTimer(KeybindListRefreshTick, 1000)
+    else
+        SetTimer(KeybindListRefreshTick, 0)
+}
+
+; Called whenever a cooldown/uses change happens: immediately refresh the visible floating list, then synchronize its one-second timer
+OnCooldownStateChanged() {
+    global KeybindListGui
+    if (IsSet(KeybindListGui) && KeybindListGui && WinExist("ahk_id " KeybindListGui.Hwnd) && DllCall("IsWindowVisible", "Ptr", KeybindListGui.Hwnd))
+        RefreshKeybindListIfVisible()
+}
+
+; Periodic refresh so cooldown timers in the floating list tick down live. Refresh before checking for completion so the final [Ns] suffix is always removed
+KeybindListRefreshTick() {
+    global KeybindListGui
+    if (!IsSet(KeybindListGui) || !KeybindListGui || !WinExist("ahk_id " KeybindListGui.Hwnd) || !DllCall("IsWindowVisible", "Ptr", KeybindListGui.Hwnd)) {
+        SetTimer(KeybindListRefreshTick, 0)
+        return
+    }
+
+    RefreshKeybindListIfVisible()
 }
 
 ; Refresh the keybind list overlay if it's visible
@@ -4466,13 +5344,15 @@ RefreshKeybindListIfVisible() {
     WinGetPos(&x, &y,,, "ahk_id " KeybindListGui.Hwnd)
     KeybindListGui.Show("Na x" x " y" y " w" listWidth " h" listHeight)
     
-    ; Show() resets transparency, so we need to set it again
-    ; Use opaque (255) in drag mode, otherwise use configured transparency
+    ; Show() resets transparency, so we need to set it again Use opaque (255) in drag mode, otherwise use configured transparency
     if (KeybindListDragMode) {
         WinSetTransparent(255, "ahk_id " KeybindListGui.Hwnd)
     } else {
         WinSetTransparent(KeybindListTransparency, "ahk_id " KeybindListGui.Hwnd)
     }
+
+    ; Keep this timer aligned with the freshly rendered list state.
+    SyncKeybindListCooldownTimer()
 }
 
 ; Execute stratagem from floating list by double-click
@@ -4503,6 +5383,7 @@ ExecuteStratagemFromList(*) {
             IniWrite(y, IniPath, "KeybindList", "PosY")
         }
         KeybindListGui.Hide()
+        SetTimer(KeybindListRefreshTick, 0)
     }
     
     ; Restore game focus before executing stratagem
