@@ -218,6 +218,8 @@ This short guide will help you apply the custom "HD2 - SRM Companion Layout" Ste
 8. Search for "HD2 - SRM Companion Layout", and select the layout.
 9. In the bottom right, click on "Apply Layout" next to the blue X.
 10. Enjoy improved mod usability with your controller!
+
+Guide in pictures: https://ibb.co/album/PxDnCT
 </details>
 
 ### Input Layout Remapper
