@@ -339,6 +339,12 @@ LButtonMacroFunc(ThisHotkey) {
         Sleep 25
         Send("{" WP_InteractKey " up}")
     }
+    
+    ; Single-shot modes (2-5): wait for the trigger key to be physically released before returning
+    if (CurrentWeaponMode != 1 && cleanHotkey != "") {
+        if GetKeyState(cleanHotkey, "P")
+            KeyWait(cleanHotkey)
+    }
 }
 
 ; Show Weapon Assistant Settings popup
@@ -356,7 +362,7 @@ ShowWeaponAssistantSettings(*) {
     
     wpSettingsGui := Gui("+Owner" . settingsGui.Hwnd, Lang.Get("weapon_assistant_title"))
     wpSettingsGui.BackColor := "202020"
-    wpSettingsGui.SetFont("s10 cC4C4C4", "Segoe UI")
+    wpSettingsGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
     wpSettingsGui.MarginX := Scale(10)
     wpSettingsGui.MarginY := Scale(10)
     
@@ -376,7 +382,7 @@ ShowWeaponAssistantSettings(*) {
     ; ===== Column 2: Safety Catch, Interact Key, Cycle Mode =====
     ; Safety Catch
     wpSettingsGui.Add("Text", "x" Scale(160) " y" Scale(15), Lang.Get("safety_catch"))
-    global wpSafetyEnabledCb := wpSettingsGui.Add("CheckBox", "x+5 yp vWPSafetyEnabled")
+    global wpSafetyEnabledCb := AddStandardCheckBox(wpSettingsGui, "x+5 yp vWPSafetyEnabled")
     wpSafetyEnabledCb.Value := SafetyEnabled
     wpSafetyEnabledCb.OnEvent("Click", OnWPSafetyEnabledChange)
     
@@ -387,7 +393,8 @@ ShowWeaponAssistantSettings(*) {
     try wpSafetyInput.controls.hotkey.Enabled := SafetyEnabled
     ; Pass-through checkbox
     wpSafetyInput.controls.ddl.GetPos(&ddlX, &ddlY, &ddlW, &ddlH)
-    global wpSafetyPassThroughCb := wpSettingsGui.Add("CheckBox", "x" (ddlX + ddlW + 5) " y" ddlY " vWPSafetyPassThrough", "~")
+    global wpSafetyPassThroughCb := AddStandardCheckBox(wpSettingsGui, "x" (ddlX + ddlW + 5) " y" ddlY " vWPSafetyPassThrough")
+    wpSettingsGui.Add("Text", "x+0 yp", "~")
     wpSafetyPassThroughCb.Value := SafetyPassThrough
     wpSafetyPassThroughCb.Enabled := SafetyEnabled
     
@@ -425,7 +432,8 @@ ShowWeaponAssistantSettings(*) {
     global wpThrowDelay := wpSettingsGui.Add("Edit", "x+" Scale(5) " yp-3 w" Scale(60) " Background2f2f2f Number", WP_ThrowDelay)
     
     ; Show in floating list checkbox
-    global wpShowInListCb := wpSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(15) " vWPShowInList", Lang.Get("show_in_list"))
+    global wpShowInListCb := AddStandardCheckBox(wpSettingsGui, "x" Scale(10) " y+" Scale(15) " vWPShowInList")
+    wpSettingsGui.Add("Text", "x+0 yp", Lang.Get("show_in_list"))
     wpShowInListCb.Value := WeaponAssistantShowInList
     
     ; Save button
@@ -853,7 +861,7 @@ ShowDriverAssistantSettings(*) {
     
     daSettingsGui := Gui("+Owner" . settingsGui.Hwnd, Lang.Get("driver_assistant_title"))
     daSettingsGui.BackColor := "202020"
-    daSettingsGui.SetFont("s10 cC4C4C4", "Segoe UI")
+    daSettingsGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
     daSettingsGui.MarginX := Scale(10)
     daSettingsGui.MarginY := Scale(10)
     
@@ -891,23 +899,28 @@ ShowDriverAssistantSettings(*) {
     global daKeyPressDelayEdit := daSettingsGui.Add("Edit", "x" Scale(150) " y+" Scale(5) " w" Scale(100) " Background2f2f2f Number", DA_KeyPressDelay)
     
     ; Enhanced Gear Switch checkbox
-    global daEnhancedCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(20) " vDA_EnhancedGearSwitch", Lang.Get("enhanced_gear_switch"))
+    global daEnhancedCb := AddStandardCheckBox(daSettingsGui, "x" Scale(10) " y+" Scale(20) " vDA_EnhancedGearSwitch")
+    daSettingsGui.Add("Text", "x+0 yp", Lang.Get("enhanced_gear_switch"))
     daEnhancedCb.Value := DA_EnhancedGearSwitch
     
     ; Enter Vehicle on Toggle checkbox
-    global daEnterVehicleOnToggleCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(10) " vDA_EnterVehicleOnToggle", Lang.Get("enter_vehicle_on_toggle"))
+    global daEnterVehicleOnToggleCb := AddStandardCheckBox(daSettingsGui, "x" Scale(10) " y+" Scale(10) " vDA_EnterVehicleOnToggle")
+    daSettingsGui.Add("Text", "x+0 yp", Lang.Get("enter_vehicle_on_toggle"))
     daEnterVehicleOnToggleCb.Value := DA_EnterVehicleOnToggle
 
     ; Handbrake on Exit checkbox
-    global daHandbrakeOnExitCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(10) " vDA_HandbrakeOnExit", Lang.Get("handbrake_on_exit"))
+    global daHandbrakeOnExitCb := AddStandardCheckBox(daSettingsGui, "x" Scale(10) " y+" Scale(10) " vDA_HandbrakeOnExit")
+    daSettingsGui.Add("Text", "x+0 yp", Lang.Get("handbrake_on_exit"))
     daHandbrakeOnExitCb.Value := DA_HandbrakeOnExit
 
     ; Driver Stratagem Call checkbox
-    global daStratagemCallCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(10) " vDA_StratagemCallEnabled", Lang.Get("driver_stratagem_call"))
+    global daStratagemCallCb := AddStandardCheckBox(daSettingsGui, "x" Scale(10) " y+" Scale(10) " vDA_StratagemCallEnabled")
+    daSettingsGui.Add("Text", "x+0 yp", Lang.Get("driver_stratagem_call"))
     daStratagemCallCb.Value := DA_StratagemCallEnabled
     
     ; Show in floating list checkbox
-    global daShowInListCb := daSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(10) " vDAShowInList", Lang.Get("show_in_list"))
+    global daShowInListCb := AddStandardCheckBox(daSettingsGui, "x" Scale(10) " y+" Scale(10) " vDAShowInList")
+    daSettingsGui.Add("Text", "x+0 yp", Lang.Get("show_in_list"))
     daShowInListCb.Value := DriverAssistantShowInList
     
     ; Save button
@@ -1270,7 +1283,7 @@ ShowInventoryManagerSettings(*) {
     
     imSettingsGui := Gui("+Owner" . settingsGui.Hwnd, Lang.Get("inventory_manager_title"))
     imSettingsGui.BackColor := "202020"
-    imSettingsGui.SetFont("s10 cC4C4C4", "Segoe UI")
+    imSettingsGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
     imSettingsGui.MarginX := Scale(10)
     imSettingsGui.MarginY := Scale(10)
     
@@ -1609,7 +1622,7 @@ ShowWeaponQuickSwitchSettings(*) {
     
     qsSettingsGui := Gui("+Owner" . settingsGui.Hwnd, Lang.Get("weapon_swap_title"))
     qsSettingsGui.BackColor := "202020"
-    qsSettingsGui.SetFont("s10 cC4C4C4", "Segoe UI")
+    qsSettingsGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
     qsSettingsGui.MarginX := Scale(10)
     qsSettingsGui.MarginY := Scale(10)
     
@@ -1617,20 +1630,24 @@ ShowWeaponQuickSwitchSettings(*) {
     qsSettingsGui.Add("Text", "x" Scale(10) " y" Scale(15) " w" Scale(250), Lang.Get("track_weapon_slots"))
     
     ; ===== Column: Slot 2, Slot 4 =====
-    global qsSlot2Cb := qsSettingsGui.Add("CheckBox", "x" Scale(150) " y+5 vQSSlot2 Section", Lang.Get("slot_label") . " 2:")
+    global qsSlot2Cb := AddStandardCheckBox(qsSettingsGui, "x" Scale(150) " y+5 vQSSlot2 Section")
+    qsSettingsGui.Add("Text", "x+0 yp", Lang.Get("slot_label") . " 2:")
     qsSlot2Cb.Value := QS_Slot2
     global qsSlot2KeyInput := HotkeyInput(qsSettingsGui, 150, 0, "", {value: QS_Slot2Key, hasWildcard: false})
     
-    global qsSlot4Cb := qsSettingsGui.Add("CheckBox", "x" Scale(150) " y+" Scale(10) " vQSSlot4", Lang.Get("slot_label") . " 4:")
+    global qsSlot4Cb := AddStandardCheckBox(qsSettingsGui, "x" Scale(150) " y+" Scale(10) " vQSSlot4")
+    qsSettingsGui.Add("Text", "x+0 yp", Lang.Get("slot_label") . " 4:")
     qsSlot4Cb.Value := QS_Slot4
     global qsSlot4KeyInput := HotkeyInput(qsSettingsGui, 150, 0, "", {value: QS_Slot4Key, hasWildcard: false})
 
     ; ===== Column: Slot 1, Slot 3, Switch hotkey =====
-    global qsSlot1Cb := qsSettingsGui.Add("CheckBox", "x" Scale(10) " ys vQSSlot1", Lang.Get("slot_label") . " 1:")
+    global qsSlot1Cb := AddStandardCheckBox(qsSettingsGui, "x" Scale(10) " ys vQSSlot1")
+    qsSettingsGui.Add("Text", "x+0 yp", Lang.Get("slot_label") . " 1:")
     qsSlot1Cb.Value := QS_Slot1
     global qsSlot1KeyInput := HotkeyInput(qsSettingsGui, 10, 0, "", {value: QS_Slot1Key, hasWildcard: false})
     
-    global qsSlot3Cb := qsSettingsGui.Add("CheckBox", "x" Scale(10) " y+" Scale(10) " vQSSlot3", Lang.Get("slot_label") . " 3:")
+    global qsSlot3Cb := AddStandardCheckBox(qsSettingsGui, "x" Scale(10) " y+" Scale(10) " vQSSlot3")
+    qsSettingsGui.Add("Text", "x+0 yp", Lang.Get("slot_label") . " 3:")
     qsSlot3Cb.Value := QS_Slot3
     global qsSlot3KeyInput := HotkeyInput(qsSettingsGui, 10, 0, "", {value: QS_Slot3Key, hasWildcard: false})
     

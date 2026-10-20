@@ -46,6 +46,11 @@ global StratagemNames    := Map()
 global OrderedIDs        := []
 global StratagemSections := Map()
 global IconIndexMap      := Map()
+global StratagemSubCat        := Map()
+global StratagemCallInTime    := Map()
+global StratagemUses          := Map()
+global StratagemBetweenUses   := Map()
+global StratagemFullRecharge  := Map()
 
 ; ---ICON FUNCTIONS---
 FindIconPath(id) {
@@ -187,11 +192,17 @@ LoadPngAsHBitmap(pngPath, targetSize) {
 ; ---DATA LOADING---
 LoadStratagemsData() {
     global Stratagems, StratagemNames, OrderedIDs, StratagemSections, StratagemsIniPath
+    global StratagemSubCat, StratagemCallInTime, StratagemUses, StratagemBetweenUses, StratagemFullRecharge
     
     Stratagems := Map()
     StratagemNames := Map()
     OrderedIDs := []
     StratagemSections := Map()
+    StratagemSubCat := Map()
+    StratagemCallInTime := Map()
+    StratagemUses := Map()
+    StratagemBetweenUses := Map()
+    StratagemFullRecharge := Map()
     
     ; Use language-specific stratagems file
     StratagemsIniPath := GetStratagemsPath()
@@ -204,11 +215,13 @@ LoadStratagemsData() {
 
     currentSection := ""
     ; Support both English and Russian section names based on language
-    lang := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
-    if (lang = "ru") {
+    langCode := (IsSet(CurrentLanguage) && CurrentLanguage = "ru") ? "ru" : "en"
+    if (langCode = "ru") {
         targetSections := "Стратагемы Наступления|Стратагемы Снабжения|Стратагемы Обороны|Стратагемы Задания"
+        missionSection := "Стратагемы Задания"
     } else {
         targetSections := "Defensive Stratagems|Offensive Stratagems|Supply Stratagems|Mission Stratagems"
+        missionSection := "Mission Stratagems"
     }
     
     for line in StrSplit(fileContent, "`n", "`r") {
@@ -239,13 +252,14 @@ LoadStratagemsData() {
             continue
         }
 
-        ; Parse name|sequence
-        pipePos := InStr(val, "|")
-        if (pipePos = 0)
+        ; Non-mission format: name|code|subcategory|call_in_time|uses|between_uses|full_recharge
+        ; Mission format: name|code|call_in_time|uses|between_uses|full_recharge
+        parts := StrSplit(val, "|")
+        if (parts.Length < 2)
             continue
             
-        name := SubStr(val, 1, pipePos - 1)
-        seqStr := SubStr(val, pipePos + 1)
+        name := Trim(parts[1])
+        seqStr := Trim(parts[2])
         
         seq := []
         for dir in StrSplit(seqStr, ",") {
@@ -263,6 +277,23 @@ LoadStratagemsData() {
         Stratagems[id] := seq
         StratagemNames[id] := name
         StratagemSections[id] := currentSection
+        ; Mission-category stratagems are always "Mission";
+        isMission := (currentSection = missionSection)
+        fieldStart := isMission ? 3 : 4
+
+        if (isMission)
+            StratagemSubCat[id] := Lang.Get("subcat_mission")
+        else if (parts.Length >= 3)
+            StratagemSubCat[id] := Trim(parts[3])
+
+        if (parts.Length >= fieldStart)
+            StratagemCallInTime[id] := Trim(parts[fieldStart])
+        if (parts.Length >= fieldStart + 1)
+            StratagemUses[id] := Trim(parts[fieldStart + 1])
+        if (parts.Length >= fieldStart + 2)
+            StratagemBetweenUses[id] := Trim(parts[fieldStart + 2])
+        if (parts.Length >= fieldStart + 3)
+            StratagemFullRecharge[id] := Trim(parts[fieldStart + 3])
         OrderedIDs.Push(id)
     }
 }
@@ -271,3 +302,16 @@ LoadStratagemsData() {
 StartMove(*)     => PostMessage(0xA1, 2,,, "A")
 StartMoveSel(*)  => PostMessage(0xA1, 2,,, "A")
 StartMoveEdit(*) => PostMessage(0xA1, 2,,, "A")
+
+; Creates a CheckBox with the default Windows themed square
+AddStandardCheckBox(gui, opts := "") {
+    cb := gui.Add("CheckBox", opts " w15 h" Scale(20))
+    return ApplyStandardCheckBoxTheme(cb)
+}
+
+; Applies the default Windows theme to a CheckBox
+ApplyStandardCheckBoxTheme(cb) {
+    try DllCall("UxTheme.dll\SetWindowTheme", "Ptr", cb.Hwnd, "Str", "", "Ptr", 0)
+    try cb.Redraw()
+    return cb
+}

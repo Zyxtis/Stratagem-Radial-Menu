@@ -44,7 +44,7 @@ class Lang {
         "post_menu", "Post Menu",
         "key_press", "Key Press",
         "general_hotkeys", "General Hotkeys:",
-        "gui_toggle", "(GUI Toggle)",
+        "gui_toggle", "(Show GUI)",
         "suspend", "(Suspend)",
         "exit", "(Exit)",
         "profile_switch", "Profile Switch Hotkeys:",
@@ -53,12 +53,12 @@ class Lang {
         "gui_settings", "GUI Settings",
         "scale_size", "(Scale Size)",
         "language_choice", "(Language)",
-        "radial_menu_ui", "Radial Menu UI",
+        "radial_menu_ui", "Radial Menu GUI",
         "menu_size", "(Menu Size)",
         "inner_radius", "(Inner Radius)",
         "icon_size", "(Icon Size)",
         "text_size", "(Text Size)",
-        "show_text", "Show Names:",
+        "show_text", "Text:",
         "camera_lock_bypass", "Camera Lock Bypass",
         "lock_cam", "Lock Camera:",
         "open_map_key", "Open Map Key:",
@@ -109,7 +109,7 @@ class Lang {
         "gamepad_disabled", "○ Disabled",
         "gamepad_connected", "● Connected",
         "gamepad_disconnected", "○ Disconnected",
-        "ocr", "Stratagem OCR",
+        "ocr", "Stratagem OCR Scan",
         "ocr_hotkey", "OCR Hotkey:",
         "hold_ms", "Hold(ms)",
         "scrambler_bypass", "Scrambler Bypass:",
@@ -245,7 +245,7 @@ class Lang {
         "search", "Search:",
         "favorites", "★",
         "add_selected", "Add Selected",
-        "double_click_favorite", "Double-click a stratagem to mark it as favorite (★)",
+        "right_click_favorite", "Right-click to mark as favorite (★)",
         "select_all_hint", "Ctrl+A to select all",
         
         ; Input layouts
@@ -300,7 +300,7 @@ class Lang {
         "no_stratagem_selected", "Please select a stratagem.",
         "not_set", "Not Set",
         "radial_menu_key_help", "Radial Menu Key",
-        "show_hide_gui_help", "Show/Hide GUI",
+        "show_gui_help", "Show GUI",
         "floating_list_help", "Floating List Overlay (Hold to drag)",
         "ocr_scan_help", "OCR Stratagem Scan",
         "scrambler_bypass_help", "Scrambler Bypass Toggle",
@@ -310,7 +310,7 @@ class Lang {
         "please_choose_different", "Please choose a different hotkey.",
         "hotkey_reserved_title", "Hotkey Reserved",
         "reserved_radial_menu_key", "Radial Menu Key",
-        "reserved_gui_toggle", "GUI Toggle",
+        "reserved_gui_toggle", "Show GUI",
         "reserved_suspend", "Suspend",
         "reserved_exit", "Exit",
         "reserved_next_profile", "Next Profile",
@@ -318,6 +318,8 @@ class Lang {
         "reserved_keybind_list_overlay", "Keybind List Overlay",
         "reserved_ocr_scan", "OCR Scan",
         "reserved_ocr_bypass_toggle", "OCR Scrambler Bypass Toggle",
+        "reserved_keybind_ocr", "Keybindings OCR",
+        "reserved_keybind_ocr_match", "Keybindings OCR (Match Profile)",
         "reserved_weapon_assistant_toggle", "Weapon Assistant Toggle",
         "reserved_weapon_assistant_fire", "Weapon Assistant Fire",
         "reserved_weapon_mode_cycle", "Weapon Mode Cycle",
@@ -328,6 +330,12 @@ class Lang {
         "keybind_profile_create_success", "Keybind profile created:",
         "profile_delete_success", "Profile deleted. Switched to:",
         "keybind_profile_delete_success", "Keybind profile deleted. Switched to:",
+        "rename_profile_title", "Rename Profile",
+        "rename_keybind_profile_title", "Rename Keybind Profile",
+        "enter_new_profile_name", "Enter a new name for the profile:",
+        "profile_name_exists", "A profile with this name already exists!",
+        "profile_rename_success", "Profile renamed to:",
+        "keybind_profile_rename_success", "Keybind profile renamed to:",
         "delete_confirm_title", "Confirm Delete",
         "error_title", "Error",
         "profile_created_title", "Profile Created",
@@ -388,9 +396,24 @@ class Lang {
         "cat_defensive", "Defensive Stratagems",
         "cat_mission", "Mission Stratagems",
         "clear_button_text", "Clear",
+        "subcat_label", "Sub:",
+        "call_in_time_label", "Call-in:",
+        "uses_label", "Uses:",
+        "between_uses_label", "Reload:",
+        "full_recharge_label", "Cooldown:",
+        "subcat_support_weapons", "Support Weapons",
+        "subcat_orbital", "Orbital",
+        "subcat_eagle", "Eagle",
+        "subcat_emplacement", "Emplacement",
+        "subcat_sentry", "Sentry",
+        "subcat_backpack", "Backpack",
+        "subcat_vehicle", "Vehicle",
+        "subcat_mission", "Mission",
+        "subcat_na", "N/A",
         
         ; Gamepad capture popup
         "capture_gamepad_button", "Capture Gamepad Button",
+        "capture_cooldown_gamepad_button", "Capture Deployment Gamepad Button",
         "capture_ocr_gamepad_button", "Capture OCR Gamepad Button",
         "capture_bypass_button", "Capture Bypass Button",
         "press_gamepad_button", "Press a button on your gamepad...",
@@ -407,7 +430,27 @@ class Lang {
         "ocr_detected_arrow_color", "Detected Arrow Color (1st arrow of 2nd row):",
         "ocr_unknown", "Unknown",
         "ocr_best_match", " (best match)",
-        "ocr_additional_stratagems", "Additional stratagems added to profile:"
+        "ocr_additional_stratagems", "Additional stratagems added to profile:",
+        
+        ; Keybindings OCR popup
+        "kocr_title", "OCR Stratagem Scan (Keybindings)",
+        "kocr_hotkey", "Stratagem Scan Key:",
+        "kocr_slots", "Stratagem Slots",
+        "kocr_strat", "Stratagem",
+        "kocr_extra", "Extra 5:",
+        "kocr_mission", "Mission Stratagems",
+        "kocr_reinforce", "Reinforce:",
+        "kocr_resupply", "Resupply:",
+        "kocr_objective", "OCR Objective:",
+        "kocr_eagle", "Eagle Re-arm:",
+        "kocr_seaf", "SEAF Artillery:",
+        "kocr_sos", "SOS Beacon:",
+        "kocr_close", "Close",
+        "kocr_no_stratagems", "No stratagems detected.",
+        "kocr_done", "OCR keybinds assigned:",
+        "kocr_match_hotkey", "Map Stratagem Positions:",
+        "tooltip_kocr_match_done", "Matched stratagems in profile:",
+        "tooltip_kocr_match_no_profile", "No profile stratagems matched the menu!"
     )
     
     static RU := Map(
@@ -448,7 +491,7 @@ class Lang {
         "post_menu", "После кл. меню",
         "key_press", "Нажатие клавиш",
         "general_hotkeys", "Основные Клавиши:",
-        "gui_toggle", "(Показать/Скрыть)",
+        "gui_toggle", "(Показать GUI)",
         "suspend", "(Пауза)",
         "exit", "(Выход)",
         "profile_switch", "Переключение Профиля:",
@@ -462,7 +505,7 @@ class Lang {
         "inner_radius", "(Внутр. радиус)",
         "icon_size", "(Разм. иконок)",
         "text_size", "(Разм. текста)",
-        "show_text", "Показ текста:",
+        "show_text", "Текст:",
         "camera_lock_bypass", "Блокировка Камеры",
         "lock_cam", "Блок. камеру:",
         "open_map_key", "Клавиша карты:",
@@ -628,7 +671,7 @@ class Lang {
         "search", "Поиск:",
         "favorites", "★",
         "add_selected", "Добавить выбранные",
-        "double_click_favorite", "Дважды щелкните по стратагеме чтобы добавить в избранное (★)",
+        "right_click_favorite", "Правый клик чтобы добавить в избранное (★)",
         "select_all_hint", "Ctrl+A для выбора всех",
         
         ; Input layouts
@@ -683,7 +726,7 @@ class Lang {
         "no_stratagem_selected", "Пожалуйста, выберите стратагему.",
         "not_set", "Не задана",
         "radial_menu_key_help", "Радиальное Меню",
-        "show_hide_gui_help", "Показать/Скрыть GUI",
+        "show_gui_help", "Показать GUI",
         "floating_list_help", "Плавающий Список (Удерживать для перетаскивания)",
         "ocr_scan_help", "Распознать Стратагемы",
         "scrambler_bypass_help", "Обход Искажений",
@@ -693,7 +736,7 @@ class Lang {
         "please_choose_different", "Пожалуйста, выберите другую клавишу.",
         "hotkey_reserved_title", "Клавиша занята",
         "reserved_radial_menu_key", "Радиальное Меню",
-        "reserved_gui_toggle", "Показать/Скрыть GUI",
+        "reserved_gui_toggle", "Показать GUI",
         "reserved_suspend", "Пауза",
         "reserved_exit", "Выход",
         "reserved_next_profile", "Следующий профиль",
@@ -701,6 +744,8 @@ class Lang {
         "reserved_keybind_list_overlay", "Плавающий Список",
         "reserved_ocr_scan", "Распознавание Стратагем OCR",
         "reserved_ocr_bypass_toggle", "Обход Искажений OCR",
+        "reserved_keybind_ocr", "Привязки OCR",
+        "reserved_keybind_ocr_match", "Привязки OCR (Совпадение Профиля)",
         "reserved_weapon_assistant_toggle", "Переключение Ассистента Оружия",
         "reserved_weapon_assistant_fire", "Огонь Ассистента Оружия",
         "reserved_weapon_mode_cycle", "Смена режима оружия",
@@ -711,6 +756,12 @@ class Lang {
         "keybind_profile_create_success", "Профиль привязок создан:",
         "profile_delete_success", "Профиль удален. Переключено на:",
         "keybind_profile_delete_success", "Профиль привязок удален. Переключено на:",
+        "rename_profile_title", "Переименовать профиль",
+        "rename_keybind_profile_title", "Переименовать профиль привязок",
+        "enter_new_profile_name", "Введите новое имя профиля:",
+        "profile_name_exists", "Профиль с таким именем уже существует!",
+        "profile_rename_success", "Профиль переименован в:",
+        "keybind_profile_rename_success", "Профиль привязок переименован в:",
         "delete_confirm_title", "Подтвердить удаление",
         "error_title", "Ошибка",
         "profile_created_title", "Профиль создан",
@@ -776,9 +827,24 @@ class Lang {
         "cat_defensive", "Стратагемы Обороны",
         "cat_mission", "Стратагемы Задания",
         "clear_button_text", "Очистить",
+        "subcat_label", "Подкат.:",
+        "call_in_time_label", "Вызов:",
+        "uses_label", "Заряды:",
+        "between_uses_label", "Перезаряд:",
+        "full_recharge_label", "Восстан.:",
+        "subcat_support_weapons", "Оружие Поддержки",
+        "subcat_orbital", "Орбитальные",
+        "subcat_eagle", "Орел",
+        "subcat_emplacement", "Установки",
+        "subcat_sentry", "Турели",
+        "subcat_backpack", "Рюкзаки",
+        "subcat_vehicle", "Техника",
+        "subcat_mission", "Миссии",
+        "subcat_na", "N/A",
         
         ; Gamepad capture popup
         "capture_gamepad_button", "Захват кнопки геймпада",
+        "capture_cooldown_gamepad_button", "Захват кнопки геймпада для броска",
         "capture_ocr_gamepad_button", "Захват кнопки OCR геймпада",
         "capture_bypass_button", "Захват кнопки обхода",
         "press_gamepad_button", "Нажмите кнопку на геймпаде...",
@@ -795,9 +861,86 @@ class Lang {
         "ocr_detected_arrow_color", "Обнаруженный цвет стрелки (1-я стрелка 2-го ряда):",
         "ocr_unknown", "Неизвестно",
         "ocr_best_match", " (совпад.)",
-        "ocr_additional_stratagems", "Дополнительные стратагемы, добавленные в профиль:"
+        "ocr_additional_stratagems", "Дополнительные стратагемы, добавленные в профиль:",
+        
+        ; Keybindings OCR popup
+        "kocr_title", "OCR-Скан Стратагем (Привязки)",
+        "kocr_hotkey", "OCR-Скан Стратагем:",
+        "kocr_slots", "Слоты Стратагем",
+        "kocr_strat", "Стратагема",
+        "kocr_extra", "Доп. 5:",
+        "kocr_mission", "Стратагемы Задания",
+        "kocr_reinforce", "Подкрепление:",
+        "kocr_resupply", "Пополнение:",
+        "kocr_objective", "OCR Миссии:",
+        "kocr_eagle", "Перезарядка Орла:",
+        "kocr_seaf", "Артиллерия ВССЗ:",
+        "kocr_sos", "Аварийный Маяк:",
+        "kocr_close", "Закрыть",
+        "kocr_no_stratagems", "Стратагемы не обнаружены.",
+        "kocr_done", "Привязки OCR назначены:",
+        "kocr_match_hotkey", "Разметка Стратагем:",
+        "tooltip_kocr_match_done", "Совпало стратагем в профиле:",
+        "tooltip_kocr_match_no_profile", "Ни одна стратагема профиля не совпала с меню!"
     )
     
+    ; Supplementary English strings
+    static EN_EX := Map(
+        "cooldowns", "Cooldowns",
+        "cooldowns_title", "Stratagem Cooldowns",
+        "enable_cooldowns", "Enable Stratagem Cooldowns",
+        "block_stratagems_on_cooldown", "Block Stratagems On Cooldown",
+        "deployment_button", "Deployment Key:",
+        "deployment_button_hint", "To cancel deployment press Stratagem Menu Key({1})",
+        "deployment_gamepad_button", "Deployment Gamepad Button:",
+        "wait_deploy_key", "Wait Deployment Key",
+        "deploy_wait_time", "Deployment Wait Time (ms):",
+        "cooldowns_saved", "Cooldowns settings saved",
+        "modules_label", "Upgrade Modules:",
+        "module_streamlined_request_process", "Streamlined Request Process",
+        "module_hand_carts", "Hand Carts",
+        "module_zero_g_breech_loading", "Zero-G Breech Loading",
+        "module_liquid_ventilated_cockpit", "Liquid-Ventilated Cockpit",
+        "module_pit_crew_hazard_pay", "Pit Crew Hazard Pay",
+        "module_expanded_weapons_bay", "Expanded Weapons Bay",
+        "module_advanced_crew_training", "Advanced Crew Training",
+        "module_targeting_software_upgrade", "Targeting Software Upgrade",
+        "module_morale_augmentation", "Morale Augmentation",
+        "module_synthetic_supplementation", "Synthetic Supplementation",
+        "module_rapid_launch_system", "Rapid Launch System",
+        "module_streamlined_launch_process", "Streamlined Launch Process",
+        "module_dynamic_tracking", "Dynamic Tracking"
+    )
+
+    ; Supplementary Russian strings
+    static RU_EX := Map(
+        "cooldowns", "Перезаряд",
+        "cooldowns_title", "Таймер Перезарядки",
+        "enable_cooldowns", "Включить Перезарядку Стратагем",
+        "block_stratagems_on_cooldown", "Блокировать Стратагемы На Перезарядке",
+        "deployment_button", "Кнопка Броска:",
+        "deployment_button_hint", "Для отмены вызова нажмите Меню Стратагем({1})",
+        "deployment_gamepad_button", "Кнопка геймпада для броска:",
+        "wait_deploy_key", "Ждать Кнопку Броска",
+        "deploy_wait_time", "Время ожидания броска (мс):",
+        "cooldowns_saved", "Настройки перезарядок сохранены",
+        "modules_label", "Модули Улучшений:",
+        "module_streamlined_request_process", "Упрощенная Подача Документов",
+        "module_hand_carts", "Ручные Тележки",
+        "module_zero_g_breech_loading", "Перезарядка В Невесомости",
+        "module_liquid_ventilated_cockpit", "Жидкостная Вентиляция Кабины",
+        "module_pit_crew_hazard_pay", "Надбавка Механикам",
+        "module_expanded_weapons_bay", "Расширенный Боевой Отсек",
+        "module_advanced_crew_training", "Продвинутая Тренировка Команды",
+        "module_targeting_software_upgrade", "Обновление Программ Прицеливания",
+        "module_morale_augmentation", "Укрепление Боевого Духа",
+        "module_synthetic_supplementation", "Искусственное Дополнение",
+        "module_rapid_launch_system", "Система Быстрого Запуска",
+        "module_streamlined_launch_process", "Упрощенный Процесс Запуска",
+        "module_dynamic_tracking", "Динамическое Отслеживание"
+        
+    )
+
     ; Get translation for a key
     static Get(key) {
         global CurrentLanguage
@@ -806,6 +949,10 @@ class Lang {
         langMap := (lang = "ru") ? this.RU : this.EN
         if langMap.Has(key)
             return langMap[key]
+        ; Fall back to the supplementary maps
+        langMapEx := (lang = "ru") ? this.RU_EX : this.EN_EX
+        if langMapEx.Has(key)
+            return langMapEx[key]
         return key
     }
     

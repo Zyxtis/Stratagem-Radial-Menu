@@ -14,7 +14,7 @@ global BaseHeight := 1440
 ; Arrow detection base values for 1440p
 global ArrowStartX := 168
 global ArrowStartY := 152
-global ArrowStepX := 28.5
+global ArrowStepX := 28.75
 global ArrowStepY := 69.75
 global ArrowCheckDistance := 8 ; Distance from center to edge for checking (pixels)
 global ArrowEdgeStripSize := 12  ; Edge strip size (number of pixels)
@@ -34,9 +34,13 @@ global OCR_DetectionMethod := 0
 ; contrast is reduced and grayscale matching needs more leeway
 global OCR_ShapeFaultTolerance := 0.15
 
+; Progressive fault tolerance steps (default 1 = single scan with full tolerance)
+; If set to 3 with 15% tolerance, performs 3 scans at 5%, 10%, and 15%
+global OCR_ShapeFaultToleranceSteps := 1
+
 ; Other settings
 global MaxArrowsPerRow := 10       ; Maximum arrows per row
-global MaxRows := 12               ; Number of stratagem rows
+global MaxRows := 10               ; Number of stratagem rows
 global DebugMode := false          ; Debug mode (show visualization)
 global MenuOpenDelay := 200        ; Delay (ms) to wait for stratagem menu to fully open
 
@@ -75,7 +79,7 @@ OCR_LoadSettingsFromIni() {
     global ArrowCheckDistance, ArrowEdgeStripSize, ArrowCenterStability
     global ArrowColor, ColorTolerance, ArrowExtractedColorTolerance, MinEdgeMatches, MaxRows, MaxArrowsPerRow, DebugMode
     global IconSizeOCR, IconStartX, IconStartY, IconVerticalStep, MenuOpenDelay, HUDScale
-    global OCR_DetectionMethod, OCR_ShapeFaultTolerance
+    global OCR_DetectionMethod, OCR_ShapeFaultTolerance, OCR_ShapeFaultToleranceSteps
     global OCR_UseGray2Two, OCR_UseGrayDiff2Two
     global OCR_UseCustomShapeTemplate, OCR_CustomShapeTemplate
     global OCR_UseCustomResolution, OCR_CustomWidth, OCR_CustomHeight
@@ -104,6 +108,7 @@ OCR_LoadSettingsFromIni() {
         HUDScale := Number(IniRead(OCR_IniPath, section, "HUDScale", HUDScale))
         OCR_DetectionMethod := Number(IniRead(OCR_IniPath, section, "DetectionMethod", OCR_DetectionMethod))
         OCR_ShapeFaultTolerance := Number(IniRead(OCR_IniPath, section, "ShapeFaultTolerance", 0.15))
+        OCR_ShapeFaultToleranceSteps := Number(IniRead(OCR_IniPath, section, "ShapeFaultToleranceSteps", 1))
         
         ; Load icon capture settings
         IconSizeOCR := Number(IniRead(OCR_IniPath, section, "IconSizeOCR", IconSizeOCR))
@@ -133,7 +138,7 @@ OCR_SaveSettingsToIni() {
     global ArrowCheckDistance, ArrowEdgeStripSize, ArrowCenterStability
     global ArrowColor, ColorTolerance, ArrowExtractedColorTolerance, MinEdgeMatches, MaxRows, MaxArrowsPerRow, DebugMode
     global IconSizeOCR, IconStartX, IconStartY, IconVerticalStep, MenuOpenDelay
-    global OCR_DetectionMethod, OCR_ShapeFaultTolerance
+    global OCR_DetectionMethod, OCR_ShapeFaultTolerance, OCR_ShapeFaultToleranceSteps
     global OCR_UseCustomResolution, OCR_CustomWidth, OCR_CustomHeight
     global OCR_UseCustomShapeTemplate, OCR_CustomShapeTemplate
     global OCR_UseGray2Two, OCR_UseGrayDiff2Two
@@ -157,6 +162,7 @@ OCR_SaveSettingsToIni() {
     IniWrite(Format("{:.2f}", HUDScale), OCR_IniPath, section, "HUDScale")
     IniWrite(OCR_DetectionMethod, OCR_IniPath, section, "DetectionMethod")
     IniWrite(Format("{:.2f}", OCR_ShapeFaultTolerance), OCR_IniPath, section, "ShapeFaultTolerance")
+    IniWrite(OCR_ShapeFaultToleranceSteps, OCR_IniPath, section, "ShapeFaultToleranceSteps")
     
     ; Save icon capture settings
     IniWrite(IconSizeOCR, OCR_IniPath, section, "IconSizeOCR")
@@ -212,9 +218,9 @@ OCR_IsExcluded(id) {
 
 OCR_GetAllStratagemDefinitions() {
     defs := []
-    iniPath := A_ScriptDir "\\Config\\stratagems.ini"
+    iniPath := GetStratagemsPath()
     try {
-        content := FileRead(iniPath)
+        content := FileRead(iniPath, "UTF-8")
         Loop Parse, content, "`n", "`r" {
             line := Trim(A_LoopField)
             if (line = "" || SubStr(line, 1, 1) = ";" || SubStr(line, 1, 1) = "[")
@@ -250,16 +256,17 @@ OCR_ShowExcludeWindow() {
         try OCR_excludeGui.Destroy()
     }
 
-    OCR_excludeGui := Gui(, "OCR Excluded Stratagems")
-    OCR_excludeGui.MarginX := 12
-    OCR_excludeGui.MarginY := 12
+    OCR_excludeGui := Gui(, Lang.Get("ocr_excluded_stratagems"))
+    OCR_excludeGui.SetFont("s" Scale(10), "Segoe UI")
+    OCR_excludeGui.MarginX := Scale(12)
+    OCR_excludeGui.MarginY := Scale(12)
     OCR_excludeGui.OnEvent("Close", (*) => OCR_excludeGui.Hide())
 
-    OCR_excludeGui.Add("Text", "x12 y10 w320", "Checked stratagems will be excluded from OCR profile updates")
+    OCR_excludeGui.Add("Text", "x" Scale(12) " y" Scale(10) " w" Scale(440), Lang.Get("checked_stratagems_excluded"))
 
-    lv := OCR_excludeGui.Add("ListView", "x12 y35 w355 h360 Checked -Multi", ["Stratagem", "ID"])
-    lv.ModifyCol(1, 180)
-    lv.ModifyCol(2, 140)
+    lv := OCR_excludeGui.Add("ListView", "x" Scale(12) " y" Scale(35) " w" Scale(435) " h" Scale(360) " Checked -Multi", [Lang.Get("name"), Lang.Get("id")])
+    lv.ModifyCol(1, Scale(255))
+    lv.ModifyCol(2, Scale(155))
 
     for item in defs {
         row := lv.Add("", item.name, item.id)
@@ -267,14 +274,14 @@ OCR_ShowExcludeWindow() {
             lv.Modify(row, "+Check")
     }
 
-    btnSave := OCR_excludeGui.Add("Button", "x73 y405 w110", "Save")
-    btnClear := OCR_excludeGui.Add("Button", "x+15 y405 w110", "Clear")
+    btnSave := OCR_excludeGui.Add("Button", "x" Scale(112) " y" Scale(405) " w" Scale(110), Lang.Get("save"))
+    btnClear := OCR_excludeGui.Add("Button", "x+15 yp w" Scale(110), Lang.Get("clear"))
 
     btnSave.OnEvent("Click", (*) => OCR_SaveExclusionsFromList(lv))
     btnClear.OnEvent("Click", (*) => OCR_ClearExclusionsFromList(lv))
 
     OCR_excludeGui.OnEvent("Escape", (*) => OCR_excludeGui.Destroy())
-    OCR_excludeGui.Show("w380 h445 Center")
+    OCR_excludeGui.Show("w" Scale(460) " h" Scale(445) " Center")
 }
 
 OCR_SaveExclusionsFromList(lv) {
@@ -288,7 +295,7 @@ OCR_SaveExclusionsFromList(lv) {
         }
     }
     OCR_SaveExcludedToIni()
-    ToolTip("Exclusions saved", A_ScreenWidth/2, 50)
+    ToolTip(Lang.Get("exclusions_saved"), 5, 5)
     SetTimer(() => ToolTip(), -1500)
 }
 
@@ -298,7 +305,7 @@ OCR_ClearExclusionsFromList(lv) {
     Loop lv.GetCount()
         lv.Modify(A_Index, "-Check")
     OCR_SaveExcludedToIni()
-    ToolTip("Exclusions cleared", A_ScreenWidth/2, 50)
+    ToolTip(Lang.Get("exclusions_cleared"), 5, 5)
     SetTimer(() => ToolTip(), -1500)
 }
 
@@ -401,7 +408,7 @@ ScanAllStratagems() {
             if (validCount < 3) {
                 foundStratagems.Push({
                     id: "unknown",
-                    name: "Unknown",
+                    name: Lang.Get("ocr_unknown"),
                     row: row,
                     x: arrows[1].x,
                     y: arrows[1].y,
@@ -426,7 +433,7 @@ ScanAllStratagems() {
             ; If not found, store as unknown
             foundStratagems.Push({
                 id: "unknown",
-                name: "Unknown",
+                name: Lang.Get("ocr_unknown"),
                 row: row,
                 x: arrows[1].x,
                 y: arrows[1].y,
@@ -450,6 +457,9 @@ ScanAllStratagems() {
 ; Output: Array of directions, e.g. ["Down", "Left", "Up"]
 OCR_GetFirstDetectedDirections() {
     global StartY, StepY, MaxRows, DebugMode, OCR_ScreenWidth, OCR_ScreenHeight
+
+    ; Reset cache so FindText re-scans the screen fresh.
+    ShapeResetCache()
 
     ; Get screen dimensions
     ScreenWidth := OCR_ScreenWidth
@@ -475,9 +485,15 @@ OCR_GetFirstDetectedDirections() {
 
         arrows := ScanArrowRow(bitmap, currentY, ScreenWidth)
         if (arrows.Length > 0) {
-            for arrow in arrows
-                firstDirections.Push(arrow.direction)
-            break
+            ; Filter out empty padding AND "?" (ambiguous tie direction)
+            ; Only pass valid directions (Up, Down, Left, Right) to key mapping
+            for arrow in arrows {
+                if (arrow.direction != "" && arrow.direction != "?")
+                    firstDirections.Push(arrow.direction)
+            }
+            ; Only use this row if we found at least one valid direction
+            if (firstDirections.Length > 0)
+                break
         }
     }
 
@@ -487,6 +503,7 @@ OCR_GetFirstDetectedDirections() {
     SelectObject(hdc, obm)
     DeleteObject(hbm)
     DeleteDC(hdc)
+    ShapeResetCache()
 
     ; Auto-clear debug visualization after 3 seconds (for OCR Objective)
     if (DebugMode)
@@ -496,10 +513,12 @@ OCR_GetFirstDetectedDirections() {
 }
 
 ; Returns arrow sequence from a specific OCR row (1-based)
-; Filters out empty padding entries so the returned sequence contains
-; only actual detected directions (safe to pass to key mapping functions)
+; Filters out empty padding entries so the returned sequence contains only actual detected directions
 OCR_GetDirectionsByRow(rowNumber) {
     global StartY, StepY, OCR_ScreenWidth, OCR_ScreenHeight
+
+    ; Reset cache so FindText re-scans the screen fresh.
+    ShapeResetCache()
 
     if (rowNumber < 1)
         return []
@@ -858,9 +877,10 @@ ShapeInitPatterns() {
 global ShapeAllArrowsCache := []
 global ShapeCacheScanned := false
 
-; Do ONE scan across all directions (like pressing F1,F2,F3,F4), cache results
+; Do ONE scan across all directions, cache results
+; Supports progressive fault tolerance: divides tolerance into N steps
 ShapeScanAllDirections() {
-    global ShapeArrowPatterns, OCR_ShapeFaultTolerance, ShapeAllArrowsCache, ShapeCacheScanned
+    global ShapeArrowPatterns, OCR_ShapeFaultTolerance, OCR_ShapeFaultToleranceSteps, ShapeAllArrowsCache, ShapeCacheScanned
     global StartX, StartY, StepX, StepY, MaxRows, MaxArrowsPerRow, OCR_ScreenWidth, OCR_ScreenHeight
     
     ; Only scan once
@@ -885,29 +905,62 @@ ShapeScanAllDirections() {
     local ftX, ftY
     ShapeAllArrowsCache := []
     
-    ; Search each direction across the arrow grid
-    dirs := [["UP", "Up"], ["DOWN", "Down"], ["LEFT", "Left"], ["RIGHT", "Right"]]
-    for i, dirPair in dirs {
-        dirKey := dirPair[1]
-        dirName := dirPair[2]
+    ; Progressive fault tolerance: divide total tolerance into N steps
+    ; Example: 15% tolerance with 3 steps = scan at 5%, 10%, then 15%
+    ; Each step scans all directions and adds only NEW arrows not found in previous steps
+    steps := Max(1, OCR_ShapeFaultToleranceSteps)
+    stepTolerance := OCR_ShapeFaultTolerance / steps
+    
+    ; Track which grid positions have been detected to avoid duplicates
+    ; Use grid-based snapping since FindText may return slightly different pixel positions
+    ; at different tolerance levels for the same arrow
+    detectedGridPositions := Map()
+    
+    ; Helper function to snap a position to the nearest grid point
+    SnapToGrid(x, y) {
+        global StartX, StartY, StepX, StepY
+        ; Calculate which column and row this position belongs to
+        col := Round((x - StartX) / StepX)
+        row := Round((y - StartY) / StepY)
+        ; Return snapped grid position
+        return Round(StartX + col * StepX) "," Round(StartY + row * StepY)
+    }
+    
+    ; Perform scans for each step, accumulating only new results
+    Loop steps {
+        currentTolerance := stepTolerance * A_Index
         
-        if (!ShapeArrowPatterns.Has(dirKey))
-            continue
-        
-        ; First call captures screen, subsequent calls reuse it
-        screenShot := (i = 1) ? 1 : 0
-        
-        result := FindText(&ftX, &ftY, regionX1, regionY1, regionX2, regionY2,
-            OCR_ShapeFaultTolerance, OCR_ShapeFaultTolerance, ShapeArrowPatterns[dirKey], screenShot, 1)
-        
-        ; FindText returns ALL matches for this direction
-        if (IsObject(result)) {
-            for item in result {
-                ShapeAllArrowsCache.Push({
-                    x: item.x,
-                    y: item.y,
-                    direction: dirName
-                })
+        ; Search each direction across the arrow grid
+        dirs := [["UP", "Up"], ["DOWN", "Down"], ["LEFT", "Left"], ["RIGHT", "Right"]]
+        for i, dirPair in dirs {
+            dirKey := dirPair[1]
+            dirName := dirPair[2]
+            
+            if (!ShapeArrowPatterns.Has(dirKey))
+                continue
+            
+            ; First call of first step captures screen, subsequent calls reuse it
+            screenShot := ((A_Index = 1) && (i = 1)) ? 1 : 0
+            
+            result := FindText(&ftX, &ftY, regionX1, regionY1, regionX2, regionY2,
+                currentTolerance, currentTolerance, ShapeArrowPatterns[dirKey], screenShot, 1)
+            
+            ; FindText returns ALL matches for this direction
+            if (IsObject(result)) {
+                for item in result {
+                    ; Snap to nearest grid position for deduplication
+                    gridKey := SnapToGrid(item.x, item.y)
+                    
+                    ; Only add if this grid position wasn't already detected at a lower tolerance
+                    if (!detectedGridPositions.Has(gridKey)) {
+                        detectedGridPositions[gridKey] := true
+                        ShapeAllArrowsCache.Push({
+                            x: item.x,
+                            y: item.y,
+                            direction: dirName
+                        })
+                    }
+                }
             }
         }
     }
@@ -1048,7 +1101,7 @@ ShowAimingGrid() {
     G := Gdip_GraphicsFromHDC(hdc)
     Gdip_SetSmoothingMode(G, 0)  ; No anti-aliasing for grid - ensures uniform 1px thickness
     
-    squareOffset := CheckDistance + 3
+    squareOffset := Round(CheckDistance * 1.65)
     penGrid := Gdip_CreatePen(0x30FFFFFF, 1)  ; Very subtle white squares
     
     Loop MaxRows {
@@ -1318,7 +1371,7 @@ FindStratagem(directions) {
     }
     
     ; Read stratagems.ini
-    stratagemIniPath := A_ScriptDir "\\Config\\stratagems.ini"
+    stratagemIniPath := GetStratagemsPath()
     
     ; For color detection (0): filter sequentially until one remains
     ; For shape detection (1): use mismatch-based scoring
@@ -1327,7 +1380,7 @@ FindStratagem(directions) {
         ; Read all stratagem entries
         allEntries := []
         try {
-            fileContent := FileRead(stratagemIniPath)
+            fileContent := FileRead(stratagemIniPath, "UTF-8")
             Loop Parse, fileContent, "`n", "`r" {
                 line := A_LoopField
                 parts := StrSplit(line, "|")
@@ -1388,7 +1441,7 @@ FindStratagem(directions) {
                     mismatches++
             }
             if (mismatches > 0)
-                return {id: candidates[1].id, name: candidates[1].name " (best match)"}
+                return {id: candidates[1].id, name: candidates[1].name Lang.Get("ocr_best_match")}
             return {id: candidates[1].id, name: candidates[1].name}
         }
         
@@ -1407,7 +1460,7 @@ FindStratagem(directions) {
                 bestMatch := {id: entry.id, name: entry.name, mismatches: mismatches}
         }
         if (bestMatch.mismatches <= 3)
-            return {id: bestMatch.id, name: bestMatch.name " (best match)"}
+            return {id: bestMatch.id, name: bestMatch.name Lang.Get("ocr_best_match")}
         
         return ""
         
@@ -1419,7 +1472,7 @@ FindStratagem(directions) {
         bestMatch := {id: "", name: "", mismatches: 9999}
         
         try {
-            fileContent := FileRead(stratagemIniPath)
+            fileContent := FileRead(stratagemIniPath, "UTF-8")
             Loop Parse, fileContent, "`n", "`r" {
                 line := A_LoopField
                 parts := StrSplit(line, "|")
@@ -1452,7 +1505,7 @@ FindStratagem(directions) {
                     ; label as "best match" since some positions are uncertain
                     if (allMatch) {
                         if (nonEmptyCount < dbDirs.Length)
-                            return {id: id, name: name " (best match)"}
+                            return {id: id, name: name Lang.Get("ocr_best_match")}
                         return {id: id, name: name}
                     }
                     
@@ -1484,7 +1537,7 @@ FindStratagem(directions) {
         }
         
         if (bestMatch.mismatches <= 3)
-            return {id: bestMatch.id, name: bestMatch.name " (best match)"}
+            return {id: bestMatch.id, name: bestMatch.name Lang.Get("ocr_best_match")}
         
         return ""
     }
@@ -1570,10 +1623,45 @@ WriteResults(stratagems, outputPath := "", profileName := "OCR") {
         }
     }
 
+    ; Track which additional stratagems were added (for reporting)
+    additionalStratagems := []
+    additionalNames := []
+
     ; Append required tail entries if not excluded
     for reqId in requiredTail {
-        if (!OCR_IsExcluded(reqId))
+        if (!OCR_IsExcluded(reqId)) {
             filteredIds.Push(reqId)
+            ; Look up the name for this ID
+            stratagemIniPath := GetStratagemsPath()
+            try {
+                fileContent := FileRead(stratagemIniPath, "UTF-8")
+                Loop Parse, fileContent, "`n", "`r" {
+                    line := Trim(A_LoopField)
+                    if (line = "" || SubStr(line, 1, 1) = ";" || SubStr(line, 1, 1) = "[")
+                        continue
+                    if (!InStr(line, "|"))
+                        continue
+                    parts := StrSplit(line, "|")
+                    if (parts.Length < 1)
+                        continue
+                    keyName := parts[1]
+                    eqPos := InStr(keyName, "=")
+                    if (!eqPos)
+                        continue
+                    id := Trim(SubStr(keyName, 1, eqPos - 1))
+                    name := Trim(SubStr(keyName, eqPos + 1))
+                    if (id = reqId) {
+                        additionalStratagems.Push(reqId)
+                        additionalNames.Push(name)
+                        break
+                    }
+                }
+            } catch {
+                ; If we can't read the file, just use the ID
+                additionalStratagems.Push(reqId)
+                additionalNames.Push(reqId)
+            }
+        }
     }
 
     for id in filteredIds {
@@ -1582,10 +1670,14 @@ WriteResults(stratagems, outputPath := "", profileName := "OCR") {
         activeList .= id
     }
 
-    ; Overwrite only the ActiveList field in target profile
-    IniWrite(activeList, outputPath, "Profile_" profileName, "ActiveList")
+    ; Overwrite only the ActiveList field in target profile.
+    ; Use the encoded section header so profile names with special characters stay valid.
+    section := "Profile_" . EncodeProfileName(profileName)
+    IniWrite(profileName, outputPath, section, "Name")
+    IniWrite(activeList, outputPath, section, "ActiveList")
 
-    return filteredIds.Length
+    ; Return object with count and additional stratagems info
+    return {count: filteredIds.Length, additional: additionalNames}
 }
 
 ; ============================================================================
@@ -1606,7 +1698,7 @@ OCR_ScanToProfile(outputPath := "", profileName := "OCR") {
             g := (pixelColor >> 8) & 0xFF
             b := pixelColor & 0xFF
             colorHex := Format("0x{:06X}", (r << 16) | (g << 8) | b)
-            arrowColorInfo := "Detected Arrow Color (1st arrow of 2nd row):`n" colorHex " (R=" r ", G=" g ", B=" b ")"
+            arrowColorInfo := colorHex " (R=" r ", G=" g ", B=" b ")"
             Gdip_DisposeImage(colorBitmap)
         }
     }
@@ -1628,10 +1720,10 @@ OCR_ScanToProfile(outputPath := "", profileName := "OCR") {
     
     if (foundStratagems.Length = 0) {
         if (DebugMode) {
-            msg := "No stratagems found!"
+            msg := Lang.Get("ocr_no_stratagems_found")
             if (arrowColorInfo != "")
                 msg .= "`n`n" arrowColorInfo
-            result := MsgBox(msg, "Scan Result", 48)
+            result := MsgBox(msg, Lang.Get("ocr_scan_result"), 48)
             if (result = "OK")
                 ClearDebugVisualization()
         }
@@ -1650,14 +1742,16 @@ OCR_ScanToProfile(outputPath := "", profileName := "OCR") {
     }
 
     ; Write results (also appends mandatory OCR Objective + Reinforce when not excluded)
-    writtenCount := WriteResults(foundStratagems, outputPath, profileName)
+    writeResult := WriteResults(foundStratagems, outputPath, profileName)
+    writtenCount := writeResult.count
+    additionalStratagems := writeResult.additional
 
     if (writtenCount = 0) {
         if (DebugMode) {
             msg := knownCount > 0
-                ? "All detected stratagems (including required tail entries) are in the exclusion list. Nothing was written to profile."
-                : "No usable stratagems found and all required tail entries are excluded. Nothing was written to profile."
-            result := MsgBox(msg, "Scan Result", 48)
+                ? Lang.Get("ocr_all_excluded")
+                : Lang.Get("ocr_no_usable")
+            result := MsgBox(msg, Lang.Get("ocr_scan_result"), 48)
             if (result = "OK")
                 ClearDebugVisualization()
         }
@@ -1665,23 +1759,31 @@ OCR_ScanToProfile(outputPath := "", profileName := "OCR") {
     }
     
     ; Build message
-    msg := "Stratagems found: " foundStratagems.Length "`n"
-    msg .= "Written to profile: " writtenCount "`n`n"
+    msg := Lang.Get("ocr_stratagems_found") foundStratagems.Length "`n"
+    msg .= Lang.Get("ocr_written_to_profile") writtenCount "`n`n"
     for strat in foundStratagems {
-        msg .= strat.name " (row " strat.row ")`n"
+        msg .= strat.name Lang.Get("ocr_row_prefix") strat.row Lang.Get("ocr_row_suffix") "`n"
+    }
+    
+    ; Show additional stratagems that were automatically added
+    if (additionalStratagems.Length > 0) {
+        msg .= "`n" Lang.Get("ocr_additional_stratagems") "`n"
+        for additionalName in additionalStratagems {
+            msg .= "  • " additionalName "`n"
+        }
     }
     
     ; Append detected arrow color info in debug mode
     if (arrowColorInfo != "")
-        msg .= "`n" arrowColorInfo
+        msg .= "`n" Lang.Get("ocr_detected_arrow_color") "`n" arrowColorInfo
     
     if (DebugMode) {
-        result := MsgBox(msg, "Scan Result", 64)
+        result := MsgBox(msg, Lang.Get("ocr_scan_result"), 64)
         if (result = "OK")
             ClearDebugVisualization()
     }
 
-    return writtenCount
+    return writeResult.count
 }
 
 ; ============================================================================
@@ -1701,10 +1803,10 @@ ArrayToString(arr) {
 ; SCRAMBLER BYPASS - ICON CAPTURE AND DETECTION
 ; ============================================================================
 ; Icon capture settings (base values for 1440p)
-global IconSizeOCR := 56                    ; Icon size in pixels
+global IconSizeOCR := 56                 ; Icon size in pixels
 global IconStartX := 70                  ; Starting X position
 global IconStartY := 108                 ; Starting Y position
-global IconVerticalStep := 70            ; Vertical offset between icons
+global IconVerticalStep := 69.75            ; Vertical offset between icons
 
 ; Flag to suppress debug mode during icon capture
 global ScramblerSuppressDebug := false
@@ -1731,7 +1833,7 @@ Icon_InitScaling() {
     IconSizeScaled := Round(IconSizeOCR * ScaleY * HUDScaleFactor)
     IconStartXScaled := Round(IconStartX * ScaleX * HUDScaleFactor)
     IconStartYScaled := Round(IconStartY * ScaleY * HUDScaleFactor)
-    IconVerticalStepScaled := Round(IconVerticalStep * ScaleY * HUDScaleFactor)
+    IconVerticalStepScaled := IconVerticalStep * ScaleY * HUDScaleFactor
 }
 
 ; Check if an icon exists at a specific row by detecting at least 2 arrows
@@ -1902,69 +2004,43 @@ OCR_ShowSettingsWindow() {
 
     ; Reuse existing settings window if already created
     if (IsObject(OCR_settingsGui)) {
-        OCR_settingsGui.Show("Center")
+        OCR_settingsGui.Show("w" Scale(610) " Center")
         return
     }
 
     ; Create settings window
-    OCR_settingsGui := Gui(, "OCR Settings (Base Values for 1440p)")
-    OCR_settingsGui.MarginX := 10
-    OCR_settingsGui.MarginY := 10
-    OCR_settingsGui.OnEvent("Close", (*) => OCR_settingsGui.Hide())
+    OCR_settingsGui := Gui("+LastFound", Lang.Get("ocr_settings_title"))
+    OCR_settingsGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
+    OCR_settingsGui.BackColor := "202020"
     
     ; =========================================================================
     ; COLUMN 1
     ; =========================================================================
     
     ; -------------------------------------------------------------------------
-    ; Groupbox 1: Arrow Position
+    ; Groupbox 1: General Settings
     ; -------------------------------------------------------------------------
-    groupArrowPos := OCR_settingsGui.Add("GroupBox", "x10 y10 w280 h150", "Arrow Position")
-    OCR_settingsGui.Add("Text", "x20 y35 w120", "ArrowStartX:")
-    edtArrowStartX := OCR_settingsGui.Add("Edit", "x+10 w120", ArrowStartX)
-    OCR_settingsGui.Add("Text", "x20 y+10 w120", "ArrowStartY:")
-    edtArrowStartY := OCR_settingsGui.Add("Edit", "x+10 w120", ArrowStartY)
-    OCR_settingsGui.Add("Text", "x20 y+10 w120", "ArrowStepX:")
-    edtArrowStepX := OCR_settingsGui.Add("Edit", "x+10 w120", ArrowStepX)
-    OCR_settingsGui.Add("Text", "x20 y+10 w120", "ArrowStepY:")
-    edtArrowStepY := OCR_settingsGui.Add("Edit", "x+10 w120", ArrowStepY)
-    
-    ; -------------------------------------------------------------------------
-    ; Groupbox 2: Icon Position
-    ; -------------------------------------------------------------------------
-    groupIconPos := OCR_settingsGui.Add("GroupBox", "x10 y175 w280 h150", "Icon Position")
-    OCR_settingsGui.Add("Text", "x20 y200 w120", "Icon Size:")
-    edtIconSize := OCR_settingsGui.Add("Edit", "x+10 w120", IconSizeOCR)
-    OCR_settingsGui.Add("Text", "x20 y+10 w120", "Start X:")
-    edtIconStartX := OCR_settingsGui.Add("Edit", "x+10 w120", IconStartX)
-    OCR_settingsGui.Add("Text", "x20 y+10 w120", "Start Y:")
-    edtIconStartY := OCR_settingsGui.Add("Edit", "x+10 w120", IconStartY)
-    OCR_settingsGui.Add("Text", "x20 y+10 w120", "Vertical Step:")
-    edtIconVerticalStep := OCR_settingsGui.Add("Edit", "x+10 w120", IconVerticalStep)
-    
-    ; -------------------------------------------------------------------------
-    ; Groupbox 3: General Settings
-    ; -------------------------------------------------------------------------
-    groupGeneral := OCR_settingsGui.Add("GroupBox", "x10 y345 w280 h280", "General Settings")
-    OCR_settingsGui.Add("Text", "x20 y370 w230", "Detected Resolution: " A_ScreenWidth "x" A_ScreenHeight)
-    global chkUseCustomResolution := OCR_settingsGui.Add("CheckBox", "x20 y+10 vChkUseCustomRes", "Use custom resolution")
+    groupGeneral := OCR_settingsGui.Add("GroupBox", "x" Scale(10) " y" Scale(10) " w" Scale(290) " h" Scale(310), Lang.Get("general_settings"))
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y" Scale(35) " w" Scale(260), Lang.Get("detected_resolution") . " " A_ScreenWidth "x" A_ScreenHeight)
+    global chkUseCustomResolution := AddStandardCheckBox(OCR_settingsGui, "x" Scale(20) " y+" Scale(10) " vChkUseCustomRes")
+    OCR_settingsGui.Add("Text", "x+0 yp", Lang.Get("use_custom_resolution"))
     chkUseCustomResolution.Value := OCR_UseCustomResolution
-    OCR_settingsGui.Add("Text", "x35 y+10 w45", "Width:")
-    global edtCustomWidth := OCR_settingsGui.Add("Edit", "x80 yp w60 Number", OCR_CustomWidth)
+    OCR_settingsGui.Add("Text", "x" Scale(40) " y+" Scale(10) " w" Scale(55), Lang.Get("width"))
+    global edtCustomWidth := OCR_settingsGui.Add("Edit", "x+0 yp w" Scale(60) " Number Background2f2f2f", OCR_CustomWidth)
     edtCustomWidth.Enabled := OCR_UseCustomResolution
-    OCR_settingsGui.Add("Text", "x35 y+6 w45", "Height:")
-    global edtCustomHeight := OCR_settingsGui.Add("Edit", "x80 yp w60 Number", OCR_CustomHeight)
+    OCR_settingsGui.Add("Text", "x" Scale(40) " y+" Scale(6) " w" Scale(55), Lang.Get("height"))
+    global edtCustomHeight := OCR_settingsGui.Add("Edit", "x+0 yp w" Scale(60) " Number Background2f2f2f", OCR_CustomHeight)
     edtCustomHeight.Enabled := OCR_UseCustomResolution
     chkUseCustomResolution.OnEvent("Click", (*) => ToggleCustomResolutionEdits())
-    OCR_settingsGui.Add("Text", "x20 y+10 w125", "MaxRows:")
-    edtMaxRows := OCR_settingsGui.Add("Edit", "x160 yp w105", MaxRows)
-    OCR_settingsGui.Add("Text", "x20 y+10 w125", "MaxArrowsPerRow:")
-    edtMaxArrowsPerRow := OCR_settingsGui.Add("Edit", "x160 yp w105", MaxArrowsPerRow)
-    OCR_settingsGui.Add("Text", "x20 y+10 w125", "Menu open delay (ms):")
-    edtMenuOpenDelay := OCR_settingsGui.Add("Edit", "x160 yp w105", MenuOpenDelay)
-    OCR_settingsGui.Add("Text", "x20 y+10 w125", "The in-game HUD Scale:")
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(150), Lang.Get("max_rows"))
+    edtMaxRows := OCR_settingsGui.Add("Edit", "x+0 yp w" Scale(120) " Background2f2f2f", MaxRows)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(150), Lang.Get("max_arrows_per_row"))
+    edtMaxArrowsPerRow := OCR_settingsGui.Add("Edit", "x+0 yp w" Scale(120) " Background2f2f2f", MaxArrowsPerRow)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(150), Lang.Get("menu_open_delay"))
+    edtMenuOpenDelay := OCR_settingsGui.Add("Edit", "x+0 yp w" Scale(120) " Background2f2f2f", MenuOpenDelay)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(150), Lang.Get("hud_scale"))
     hudScaleList := ["0.75", "0.80", "0.85", "0.90", "0.95", "1.00", "1.05", "1.10", "1.15", "1.20", "1.25"]
-    edtHUDScale := OCR_settingsGui.Add("DropDownList", "x160 yp w105", hudScaleList)
+    edtHUDScale := OCR_settingsGui.Add("DropDownList", "x+0 yp w" Scale(120) " Background2f2f2f", hudScaleList)
     hudScaleIndex := 4
     for i, val in hudScaleList {
         if (val = Format("{:.2f}", HUDScale)) {
@@ -1973,8 +2049,35 @@ OCR_ShowSettingsWindow() {
         }
     }
     edtHUDScale.Choose(hudScaleIndex)
-    chkDebugMode := OCR_settingsGui.Add("Checkbox", "x20 y+10 w200", "Debug mode (visualization)")
+    chkDebugMode := AddStandardCheckBox(OCR_settingsGui, "x" Scale(20) " y+" Scale(10))
+    OCR_settingsGui.Add("Text", "x+0 yp", Lang.Get("debug_mode_visualization"))
     chkDebugMode.Value := DebugMode
+    
+    ; -------------------------------------------------------------------------
+    ; Groupbox 2: Arrow Position
+    ; -------------------------------------------------------------------------
+    groupArrowPos := OCR_settingsGui.Add("GroupBox", "x" Scale(10) " y" Scale(335) " w" Scale(290) " h" Scale(160), Lang.Get("arrow_position"))
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y" Scale(360) " w" Scale(140), Lang.Get("start_x"))
+    edtArrowStartX := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", ArrowStartX)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(140), Lang.Get("start_y"))
+    edtArrowStartY := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", ArrowStartY)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(140), Lang.Get("arrow_step_x"))
+    edtArrowStepX := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", ArrowStepX)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(140), Lang.Get("arrow_step_y"))
+    edtArrowStepY := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", ArrowStepY)
+    
+    ; -------------------------------------------------------------------------
+    ; Groupbox 3: Icon Position
+    ; -------------------------------------------------------------------------
+    groupIconPos := OCR_settingsGui.Add("GroupBox", "x" Scale(10) " y" Scale(510) " w" Scale(290) " h" Scale(160), Lang.Get("icon_position"))
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y" Scale(535) " w" Scale(140), Lang.Get("icon_size_ocr"))
+    edtIconSize := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", IconSizeOCR)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(140), Lang.Get("start_x"))
+    edtIconStartX := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", IconStartX)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(140), Lang.Get("start_y"))
+    edtIconStartY := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", IconStartY)
+    OCR_settingsGui.Add("Text", "x" Scale(20) " y+" Scale(10) " w" Scale(140), Lang.Get("vertical_step"))
+    edtIconVerticalStep := OCR_settingsGui.Add("Edit", "x+10 w" Scale(120) " Background2f2f2f", IconVerticalStep)
     
     ; =========================================================================
     ; COLUMN 2
@@ -1983,10 +2086,10 @@ OCR_ShowSettingsWindow() {
     ; -------------------------------------------------------------------------
     ; Groupbox 4: Arrow Detection Method
     ; -------------------------------------------------------------------------
-    groupMethod := OCR_settingsGui.Add("GroupBox", "x310 y10 w280 h50", "Arrow Detection Method")
-    OCR_settingsGui.Add("Text", "x320 y30 w110", "Detection Method:")
-    methodList := ["Color Detection", "Shape Detection (Beta)"]
-    edtDetectionMethod := OCR_settingsGui.Add("DropDownList", "x440 y28 w138", methodList)
+    groupMethod := OCR_settingsGui.Add("GroupBox", "x" Scale(310) " y" Scale(10) " w" Scale(290) " h" Scale(60), Lang.Get("arrow_detection_method"))
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y" Scale(35) " w" Scale(135), Lang.Get("detection_method"))
+    methodList := [Lang.Get("color_detection_ddl"), Lang.Get("shape_detection_ddl")]
+    edtDetectionMethod := OCR_settingsGui.Add("DropDownList", "x+0 w" Scale(135) " Background2f2f2f", methodList)
     edtDetectionMethod.Choose(OCR_DetectionMethod + 1)
     edtDetectionMethod.OnEvent("Change", (*) => UpdateMethodHelp())
     UpdateMethodHelp() {
@@ -1995,33 +2098,34 @@ OCR_ShowSettingsWindow() {
     ; -------------------------------------------------------------------------
     ; Groupbox 5: Color Detection
     ; -------------------------------------------------------------------------
-    groupColor := OCR_settingsGui.Add("GroupBox", "x310 y75 w280 h225", "Color Detection")
-    OCR_settingsGui.Add("Text", "x320 y100 w115", "ArrowColor (RGB):")
-    edtArrowColor := OCR_settingsGui.Add("Edit", "x450 yp w120", Format("0x{:06X}", ArrowColor))
-    OCR_settingsGui.Add("Text", "x320 y+7 w115", "ColorTolerance:")
-    edtColorTolerance := OCR_settingsGui.Add("Edit", "x450 yp w120", ColorTolerance)
-    OCR_settingsGui.Add("Text", "x320 y+7 w115", "ExtractColorTol:")
-    edtArrowExtractedColorTolerance := OCR_settingsGui.Add("Edit", "x450 yp w120", ArrowExtractedColorTolerance)
-    OCR_settingsGui.Add("Text", "x320 y+7 w115", "ArrowCheckDistance:")
-    edtArrowCheckDistance := OCR_settingsGui.Add("Edit", "x450 yp w120", ArrowCheckDistance)
-    OCR_settingsGui.Add("Text", "x320 y+7 w115", "ArrowEdgeStripSize:")
-    edtArrowEdgeStripSize := OCR_settingsGui.Add("Edit", "x450 yp w120", ArrowEdgeStripSize)
-    OCR_settingsGui.Add("Text", "x320 y+7 w115", "ArrowCenterStability:")
-    edtArrowCenterStability := OCR_settingsGui.Add("Edit", "x450 yp w120", ArrowCenterStability)
-    OCR_settingsGui.Add("Text", "x320 y+7 w115", "MinEdgeMatches:")
-    edtMinEdgeMatches := OCR_settingsGui.Add("Edit", "x450 yp w120", MinEdgeMatches)
+    groupColor := OCR_settingsGui.Add("GroupBox", "x" Scale(310) " y" Scale(85) " w" Scale(290) " h" Scale(250), Lang.Get("color_detection"))
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y" Scale(110) " w" Scale(145), Lang.Get("arrow_color_rgb"))
+    edtArrowColor := OCR_settingsGui.Add("Edit", "x+5 w" Scale(120) " Background2f2f2f", Format("0x{:06X}", ArrowColor))
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(7) " w" Scale(145), Lang.Get("color_tolerance"))
+    edtColorTolerance := OCR_settingsGui.Add("Edit", "x+5 yp w" Scale(120) " Background2f2f2f", ColorTolerance)
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(7) " w" Scale(145), Lang.Get("extract_color_tol"))
+    edtArrowExtractedColorTolerance := OCR_settingsGui.Add("Edit", "x+5 yp w" Scale(120) " Background2f2f2f", ArrowExtractedColorTolerance)
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(7) " w" Scale(145), Lang.Get("arrow_center_stability"))
+    edtArrowCenterStability := OCR_settingsGui.Add("Edit", "x+5 w" Scale(120) " Background2f2f2f", ArrowCenterStability)
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(7) " w" Scale(145), Lang.Get("arrow_check_distance"))
+    edtArrowCheckDistance := OCR_settingsGui.Add("Edit", "x+5 w" Scale(120) " Background2f2f2f", ArrowCheckDistance)
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(7) " w" Scale(145), Lang.Get("arrow_edge_strip_size"))
+    edtArrowEdgeStripSize := OCR_settingsGui.Add("Edit", "x+5 w" Scale(120) " Background2f2f2f", ArrowEdgeStripSize)
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(7) " w" Scale(145), Lang.Get("min_edge_matches"))
+    edtMinEdgeMatches := OCR_settingsGui.Add("Edit", "x+5 w" Scale(120) " Background2f2f2f", MinEdgeMatches)
     
     ; -------------------------------------------------------------------------
     ; Groupbox 6: Shape Detection
     ; -------------------------------------------------------------------------
-    groupShape := OCR_settingsGui.Add("GroupBox", "x310 y315 w280 h200", "Shape Detection")
+    groupShape := OCR_settingsGui.Add("GroupBox", "x" Scale(310) " y" Scale(350) " w" Scale(290) " h" Scale(245), Lang.Get("shape_detection"))
     ; Current template info
     currentTemplate := OCR_GetShapeTemplateResolution()
-    global OCR_templateText := OCR_settingsGui.Add("Text", "x320 y340 w240", "Template: " currentTemplate " (current)")
+    global OCR_templateText := OCR_settingsGui.Add("Text", "x" Scale(320) " y" Scale(375) " w" Scale(265), Lang.Get("template_label") . " " currentTemplate " (" Lang.Get("current_temp") . ")")
     ; Custom shape template selection
-    global chkUseCustomShapeTemplate := OCR_settingsGui.Add("CheckBox", "x320 y+15 vChkUseCustomTemplate", "Use custom shape template")
+    global chkUseCustomShapeTemplate := AddStandardCheckBox(OCR_settingsGui, "x" Scale(320) " y+" Scale(15) " vChkUseCustomTemplate")
+    OCR_settingsGui.Add("Text", "x+0 yp", Lang.Get("use_custom_shape_template_checkbox"))
     chkUseCustomShapeTemplate.Value := OCR_UseCustomShapeTemplate
-    global edtCustomShapeTemplate := OCR_settingsGui.Add("DropDownList", "x340 y+5 w120", ["1080p", "1440p", "2160p"])
+    global edtCustomShapeTemplate := OCR_settingsGui.Add("DropDownList", "x" Scale(340) " y+" Scale(5) " w" Scale(120) " Background2f2f2f", ["1080p", "1440p", "2160p"])
     ; Set the DDL to the current custom template value
     shapeTemplateChoice := OCR_CustomShapeTemplate
     if (shapeTemplateChoice = "")
@@ -2037,11 +2141,15 @@ OCR_ShowSettingsWindow() {
     edtCustomShapeTemplate.Enabled := OCR_UseCustomShapeTemplate
     chkUseCustomShapeTemplate.OnEvent("Click", (*) => ToggleCustomShapeTemplateEdits())
     ; Other setting
-    OCR_settingsGui.Add("Text", "x320 y+15 w80", "Fault Tolerance:")
-    edtFaultTolerance := OCR_settingsGui.Add("Edit", "x+10 w40", Format("{:.0f}", OCR_ShapeFaultTolerance * 100) . "%")
-    global chkUseGray2Two := OCR_settingsGui.Add("CheckBox", "x320 y+10 w140", "Gray2Two patterns")
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(15) " w" Scale(105), Lang.Get("fault_tolerance"))
+    edtFaultTolerance := OCR_settingsGui.Add("Edit", "x+0 w" Scale(40) " Background2f2f2f", Format("{:.0f}", OCR_ShapeFaultTolerance * 100) . "%")
+    OCR_settingsGui.Add("Text", "x" Scale(320) " y+" Scale(10) " w" Scale(105), Lang.Get("fault_tolerance_steps"))
+    edtFaultToleranceSteps := OCR_settingsGui.Add("Edit", "x+0 w" Scale(40) " Background2f2f2f Number", OCR_ShapeFaultToleranceSteps)
+    global chkUseGray2Two := AddStandardCheckBox(OCR_settingsGui, "x" Scale(320) " y+" Scale(10))
+    OCR_settingsGui.Add("Text", "x+0 yp", Lang.Get("gray2two_patterns"))
     chkUseGray2Two.Value := OCR_UseGray2Two
-    global chkUseGrayDiff2Two := OCR_settingsGui.Add("CheckBox", "x320 y+10 w160", "GrayDiff2Two patterns")
+    global chkUseGrayDiff2Two := AddStandardCheckBox(OCR_settingsGui, "x" Scale(320) " y+" Scale(10))
+    OCR_settingsGui.Add("Text", "x+0 yp", Lang.Get("graydiff2two_patterns"))
     chkUseGrayDiff2Two.Value := OCR_UseGrayDiff2Two
     
     
@@ -2049,9 +2157,9 @@ OCR_ShowSettingsWindow() {
     ; =========================================================================
     ; BUTTONS
     ; =========================================================================
-    btnApply := OCR_settingsGui.Add("Button", "x125 y630 w100", "Apply")
-    btnExclude := OCR_settingsGui.Add("Button", "x+10 yp w130", "Exclusion List")
-    btnReset := OCR_settingsGui.Add("Button", "x+10 yp w100", "Reset")
+    btnApply := OCR_settingsGui.Add("Button", "x" Scale(125) " y" Scale(680) " w" Scale(100), Lang.Get("apply"))
+    btnExclude := OCR_settingsGui.Add("Button", "x+10 yp w" Scale(140), Lang.Get("exclusion_list"))
+    btnReset := OCR_settingsGui.Add("Button", "x+10 yp w" Scale(100), Lang.Get("reset"))
     btnExclude.OnEvent("Click", (*) => OCR_ShowExcludeWindow())
     
     ; Apply button handler
@@ -2062,6 +2170,8 @@ OCR_ShowSettingsWindow() {
         ; Parse fault tolerance from percentage (e.g. "5%" -> 0.05)
         ftText := Trim(edtFaultTolerance.Value, "% ")
         OCR_ShapeFaultTolerance := Number(ftText) / 100
+        ; Read fault tolerance steps
+        OCR_ShapeFaultToleranceSteps := Max(1, edtFaultToleranceSteps.Value)
         ; Read pattern selection checkboxes
         OCR_UseGray2Two := chkUseGray2Two.Value
         OCR_UseGrayDiff2Two := chkUseGrayDiff2Two.Value
@@ -2109,7 +2219,7 @@ OCR_ShowSettingsWindow() {
         
         ; Update the template display text to reflect the new template
         newTemplate := OCR_GetShapeTemplateResolution()
-        try OCR_templateText.Text := "Template: " newTemplate " (current)"
+        try OCR_templateText.Text := Lang.Get("template_label") . " " newTemplate " (" Lang.Get("current_temp") . ")"
         
         ; Force shape pattern re-initialization on next scan
         ; This makes pattern selection (Gray2Two/GrayDiff2Two) take effect immediately
@@ -2118,7 +2228,7 @@ OCR_ShowSettingsWindow() {
         ; Toggle persistent aiming grid based on DebugMode
         ToggleDebugGrid()
 
-        ToolTip("Settings saved", A_ScreenWidth/2, 50)
+        ToolTip(Lang.Get("settings_saved"), 5, 5)
         SetTimer(() => ToolTip(), -1500)
     }
     
@@ -2133,7 +2243,7 @@ OCR_ShowSettingsWindow() {
         OCR_DetectionMethod := 0
         ArrowStartX := 168
         ArrowStartY := 152
-        ArrowStepX := 28.5
+        ArrowStepX := 28.75
         ArrowStepY := 69.75
         ArrowCheckDistance := 8
         ArrowEdgeStripSize := 12
@@ -2142,7 +2252,7 @@ OCR_ShowSettingsWindow() {
         ColorTolerance := 60
         ArrowExtractedColorTolerance := 10
         MinEdgeMatches := 4
-        MaxRows := 12
+        MaxRows := 10
         MaxArrowsPerRow := 10
         DebugMode := false
         MenuOpenDelay := 200
@@ -2152,7 +2262,7 @@ OCR_ShowSettingsWindow() {
         IconSizeOCR := 56
         IconStartX := 70
         IconStartY := 108
-        IconVerticalStep := 70
+        IconVerticalStep := 69.75
         
         ; Reset custom resolution settings
         OCR_UseCustomResolution := false
@@ -2170,7 +2280,7 @@ OCR_ShowSettingsWindow() {
 
         ; Update the template display text after reset
         newTemplate := OCR_GetShapeTemplateResolution()
-        try OCR_templateText.Text := "Template: " newTemplate " (current)"
+        try OCR_templateText.Text := Lang.Get("template_label") . " " newTemplate " (" Lang.Get("current_temp") . ")"
 
         ; Refresh controls with default values
         OCR_ShapeFaultTolerance := 0.15
@@ -2214,13 +2324,13 @@ OCR_ShowSettingsWindow() {
         edtIconStartY.Value := IconStartY
         edtIconVerticalStep.Value := IconVerticalStep
 
-        ToolTip("Settings reset to defaults", A_ScreenWidth/2, 50)
+        ToolTip(Lang.Get("settings_reset_defaults"), 5, 5)
         SetTimer(() => ToolTip(), -1500)
     }
     
     ; Show window centered on screen
-    OCR_settingsGui.OnEvent("Escape", (*) => OCR_settingsGui.Destroy())
-    OCR_settingsGui.Show("Center")
+    OCR_settingsGui.OnEvent("Escape", (*) => OCR_settingsGui.Hide())
+    OCR_settingsGui.Show("w" Scale(610) " Center")
 }
 
 ; Helper function to enable/disable custom resolution edit fields

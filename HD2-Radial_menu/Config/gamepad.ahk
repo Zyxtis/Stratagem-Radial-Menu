@@ -4,246 +4,512 @@
 
 ; ===GAMEPAD GLOBAL VARIABLES===
 global GamepadEnabled := false
-global GamepadMenuButton := "RB"  ; Default to RB button (Xbox layout)
-global GamepadMenuButtonDDLValue := ""  ; Stores "[Input]" or button name from DDL selection
-global OCRGamepadButton := ""  ; Empty = disabled
+global GamepadMenuButton := "RB"
+global GamepadMenuButtonDDLValue := ""
+global OCRGamepadButton := ""
 global OCRGamepadButtonDDLValue := "[Input]"
 global OCRHoldStartTick := 0
 global OCRTriggered := false
 global GamepadConnected := false
-global GamepadType := "Xbox"  ; "Xbox" or "PlayStation"
-global GamepadNavigationStick := "Right"  ; "Left" or "Right" stick for radial menu navigation
-global GamepadJoyID := 1  ; Joystick ID (1-16)
+global GamepadType := "Xbox"
+global GamepadNavigationStick := "Right"
+global GamepadJoyID := 0
 
-; Gamepad button names mapping
+; Input backend:
+; XInput is preferred because it is independent of the foreground window.
+; Joy is kept as a fallback for DirectInput / legacy controllers.
+global GamepadBackend := "None"
+global GamepadBackendMode := "Auto"
+global GamepadDebugMode := false
+global GamepadXInputUser := -1
+global GamepadXInputDLL := ""
+global GamepadXInputAvailable := false
+global GamepadTriggerThreshold := 30
+global GamepadStickDeadzone := 0.15
+
 global GamepadButtonNames := Map(
     "Xbox", ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "Back", "Start", "LS", "RS", "DPadUp", "DPadDown", "DPadLeft", "DPadRight"],
     "PlayStation", ["Cross", "Circle", "Square", "Triangle", "L1", "R1", "L2", "R2", "Select", "Start", "L3", "R3", "DPadUp", "DPadDown", "DPadLeft", "DPadRight"]
 )
 
-; Joystick button numbers (1-based, standard DirectInput mapping)
-; Xbox controller: A=1, B=2, X=3, Y=4, LB=5, RB=6, Back=7, Start=8, LS=9, RS=10
-; LT and RT are triggers (axes) - handled separately via JoyZ
 global GamepadButtonNumbers := Map(
-    "A", 1,
-    "B", 2,
-    "X", 3,
-    "Y", 4,
-    "LB", 5,
-    "RB", 6,
-    "Back", 7,
-    "Start", 8,
-    "LS", 9,
-    "RS", 10,
-    "LT", "TriggerL",  ; Left trigger - uses JoyZ axis
-    "RT", "TriggerR",  ; Right trigger - uses JoyZ axis
-    ; D-Pad is handled as POV hat
-    "DPadUp", "POV0",
-    "DPadDown", "POV180",
-    "DPadLeft", "POV270",
-    "DPadRight", "POV90"
+    "A", 1, "B", 2, "X", 3, "Y", 4, "LB", 5, "RB", 6,
+    "Back", 7, "Start", 8, "LS", 9, "RS", 10,
+    "LT", "TriggerL", "RT", "TriggerR",
+    "DPadUp", "POV0", "DPadDown", "POV180", "DPadLeft", "POV270", "DPadRight", "POV90"
 )
 
-; PlayStation controller button names to Xbox equivalents
 global PSButtonToXbox := Map(
-    "Cross", "A",
-    "Circle", "B",
-    "Square", "X",
-    "Triangle", "Y",
-    "L1", "LB",
-    "R1", "RB",
-    "L2", "LT",
-    "R2", "RT",
-    "Select", "Back",
-    "Start", "Start",
-    "L3", "LS",
-    "R3", "RS"
+    "Cross", "A", "Circle", "B", "Square", "X", "Triangle", "Y",
+    "L1", "LB", "R1", "RB", "L2", "LT", "R2", "RT",
+    "Select", "Back", "Start", "Start", "L3", "LS", "R3", "RS"
 )
 
-; ===GAMEPAD INITIALIZATION===
+; XInput XINPUT_GAMEPAD button masks
+global XI_DPAD_UP := 0x0001
+global XI_DPAD_DOWN := 0x0002
+global XI_DPAD_LEFT := 0x0004
+global XI_DPAD_RIGHT := 0x0008
+global XI_START := 0x0010
+global XI_BACK := 0x0020
+global XI_LS := 0x0040
+global XI_RS := 0x0080
+global XI_LB := 0x0100
+global XI_RB := 0x0200
+global XI_A := 0x1000
+global XI_B := 0x2000
+global XI_X := 0x4000
+global XI_Y := 0x8000
+
+; ===GAMEPAD INITIALIZATION / BACKEND===
 InitGamepad() {
-    global GamepadEnabled, GamepadConnected
-    
-    ; Check initial connection status
-    CheckGamepadConnection()
+    global GamepadConnected, GamepadBackend, GamepadXInputAvailable, GamepadJoyID
+
+    GamepadConnected := false
+    GamepadBackend := "None"
+    GamepadJoyID := 0
+
+    GamepadXInputAvailable := InitXInput()
+
+    if (GamepadBackendMode != "DirectInput") {
+        if (GamepadXInputAvailable && FindXInputController()) {
+            GamepadBackend := "XInput"
+            GamepadConnected := true
+        }
+    }
+
+    ; Auto mode (and a failed XInput detection) falls back to DirectInput.
+    if (!GamepadConnected && GamepadBackendMode != "XInput") {
+        if (CheckLegacyJoystickConnection()) {
+            GamepadBackend := "Joy"
+            GamepadConnected := true
+        }
+    }
+
+    UpdateGamepadStatusText()
+}
+
+InitXInput() {
+    global GamepadXInputDLL
+
+    for dllName in ["xinput1_4", "xinput1_3", "xinput9_1_0", "xinput1_2", "xinput1_1"] {
+        try {
+            h := DllCall("LoadLibrary", "Str", dllName ".dll", "Ptr")
+            if (!h)
+                continue
+            addr := DllCall("GetProcAddress", "Ptr", h, "AStr", "XInputGetState", "Ptr")
+            if (!addr)
+                continue
+            GamepadXInputDLL := dllName
+            return true
+        } catch {
+        }
+    }
+
+    GamepadXInputDLL := ""
+    return false
+}
+
+FindXInputController() {
+    global GamepadXInputDLL, GamepadXInputUser
+
+    if (GamepadXInputDLL = "")
+        return false
+
+    Loop 4 {
+        user := A_Index - 1
+        state := Buffer(20, 0)
+        try {
+            result := DllCall(GamepadXInputDLL "\XInputGetState", "UInt", user, "Ptr", state.Ptr, "UInt")
+            if (result = 0) {
+                GamepadXInputUser := user
+                return true
+            }
+        } catch {
+        }
+    }
+
+    GamepadXInputUser := -1
+    return false
 }
 
 ; ===GAMEPAD CONNECTION CHECK===
 CheckGamepadConnection(*) {
-    global GamepadConnected, GamepadJoyID
-    
-    ; Reset
-    GamepadConnected := false
-    GamepadJoyID := 0
-    
-    ; Check which joystick is connected (1-16)
-    try {
-        Loop 16 {
-            ; GetJoyName returns the name of the joystick if connected
-            joyName := GetKeyState("Joy" A_Index, "Name")
-            if (joyName != "" && joyName != "Error") {
-                GamepadConnected := true
-                GamepadJoyID := A_Index
-                break
-            }
+    global GamepadConnected, GamepadJoyID, GamepadBackend
+
+    oldBackend := GamepadBackend
+    oldConnected := GamepadConnected
+
+    ; Do not clear the current source before testing alternatives. Bluetooth
+    ; DirectInput devices can briefly fail enumeration while still accepting
+    ; button input. Losing the ID here used to make the next poll impossible.
+    previousJoyID := GamepadJoyID
+    previousBackend := GamepadBackend
+    previousConnected := GamepadConnected
+
+    detected := false
+    if (GamepadBackendMode != "DirectInput") {
+        if (FindXInputController()) {
+            GamepadBackend := "XInput"
+            GamepadConnected := true
+            GamepadJoyID := 0
+            detected := true
         }
-        
-        ; Fallback: check if any buttons work
-        if (!GamepadConnected) {
-            Loop 16 {
-                if (GetKeyState("Joy" A_Index, "P") != "") {
+    }
+
+    if (!detected && GamepadBackendMode != "XInput") {
+        if (CheckLegacyJoystickConnection()) {
+            GamepadBackend := "Joy"
+            GamepadConnected := true
+            detected := true
+        }
+    }
+
+    if (!detected && previousBackend = "Joy" && previousJoyID > 0) {
+        ; Preserve a previously working Bluetooth DirectInput source.
+        GamepadJoyID := previousJoyID
+        GamepadBackend := "Joy"
+        GamepadConnected := previousConnected || true
+    } else if (!detected) {
+        GamepadConnected := false
+        GamepadBackend := "None"
+    }
+
+    if (oldBackend != GamepadBackend || oldConnected != GamepadConnected)
+        UpdateGamepadStatusText()
+    else
+        try UpdateGamepadStatusText()
+}
+
+CheckLegacyJoystickConnection() {
+    global GamepadJoyID
+
+    ; Keep an already acquired Joy ID. Some Bluetooth DirectInput devices
+    ; temporarily return an empty Name even though their input is still valid.
+    if (GamepadJoyID > 0)
+        return true
+
+    ; First try the normal device-name enumeration.
+    Loop 16 {
+        joyName := ""
+        try joyName := GetKeyState("Joy" A_Index, "Name")
+        if (joyName != "" && joyName != "Error") {
+            GamepadJoyID := A_Index
+            return true
+        }
+    }
+
+    ; Do NOT use GetKeyState("JoyN", "P") as a connection test: an
+    ; unpressed button returns 0, so it cannot prove that the device exists.
+    ; Actual button presses are detected by GetPressedGamepadButton().
+    return false
+}
+
+; Try to discover a DirectInput device from an actual button press.
+; This is intentionally independent of the connection/status flag because
+; some Bluetooth HID/DInput devices expose their buttons before AHK exposes
+; a usable device name.
+AcquireLegacyJoystickFromInput() {
+    global GamepadJoyID, GamepadBackend, GamepadConnected
+
+    buttonMap := Map(1,"A", 2,"B", 3,"X", 4,"Y", 5,"LB", 6,"RB", 7,"Back", 8,"Start", 9,"LS", 10,"RS")
+
+    Loop 16 {
+        joyID := A_Index
+        Loop 32 {
+            btnNum := A_Index
+            try {
+                if (GetKeyState(joyID . "Joy" . btnNum, "P")) {
+                    GamepadJoyID := joyID
+                    GamepadBackend := "Joy"
                     GamepadConnected := true
-                    GamepadJoyID := A_Index
-                    break
+                    return buttonMap.Has(btnNum) ? buttonMap[btnNum] : "Joy" . btnNum
                 }
             }
         }
-    } catch {
-        GamepadConnected := false
-        GamepadJoyID := 0
+
+        ; Check POV as well.
+        try {
+            pov := GetKeyState(joyID . "JoyPOV", "P")
+            if (pov != "" && pov >= 0) {
+                GamepadJoyID := joyID
+                GamepadBackend := "Joy"
+                GamepadConnected := true
+                if (pov < 4500 || pov > 31500)
+                    return "DPadUp"
+                if (pov < 13500)
+                    return "DPadRight"
+                if (pov < 22500)
+                    return "DPadDown"
+                return "DPadLeft"
+            }
+        }
     }
-    
-    ; Update status text if GUI is created
-    try {
-        UpdateGamepadStatusText()
-    }
+
+    return ""
 }
 
-; Update gamepad status text in GUI
+EnsureGamepadInputSource() {
+    global GamepadBackendMode, GamepadBackend, GamepadConnected
+    global GamepadXInputAvailable
+
+    ; Do not let a stale/disconnected status prevent actual input detection.
+    if (GamepadBackendMode != "DirectInput") {
+        if (!GamepadXInputAvailable)
+            GamepadXInputAvailable := InitXInput()
+        if (FindXInputController()) {
+            GamepadBackend := "XInput"
+            GamepadConnected := true
+            return true
+        }
+    }
+
+    if (GamepadBackendMode != "XInput") {
+        if (CheckLegacyJoystickConnection()) {
+            GamepadBackend := "Joy"
+            GamepadConnected := true
+            return true
+        }
+    }
+
+    return false
+}
+
 UpdateGamepadStatusText() {
     global GamepadConnected, GamepadEnabled, gamepadStatusText
-    
     if (!IsSet(gamepadStatusText) || !gamepadStatusText)
         return
-    
+
     if (!GamepadEnabled) {
-        gamepadStatusText.Opt("c808080")  ; Gray
+        gamepadStatusText.Opt("c808080")
         gamepadStatusText.Value := Lang.Get("gamepad_disabled")
     } else if (GamepadConnected) {
-        gamepadStatusText.Opt("c00FF00")  ; Green
+        gamepadStatusText.Opt("c00FF00")
         gamepadStatusText.Value := Lang.Get("gamepad_connected")
     } else {
-        gamepadStatusText.Opt("cFF0000")  ; Red
+        gamepadStatusText.Opt("cFF0000")
         gamepadStatusText.Value := Lang.Get("gamepad_disconnected")
     }
 }
 
-; ===GAMEPAD BUTTON CHECK===
-; Returns true if the specified gamepad button is pressed
-IsGamepadButtonPressed(buttonName) {
-    global GamepadButtonNumbers, GamepadType
-    
-    ; Handle direct JoyN format (e.g., "Joy11", "Joy12", etc.)
+; ===UNIFIED GAMEPAD STATE===
+GetXInputState() {
+    global GamepadXInputDLL, GamepadXInputUser
+
+    if (GamepadXInputDLL = "" || GamepadXInputUser < 0)
+        return 0
+
+    state := Buffer(20, 0)
+    try {
+        result := DllCall(GamepadXInputDLL "\XInputGetState", "UInt", GamepadXInputUser, "Ptr", state.Ptr, "UInt")
+        if (result != 0) {
+            GamepadXInputUser := -1
+            return 0
+        }
+        return state
+    } catch {
+        GamepadXInputUser := -1
+        return 0
+    }
+}
+
+NormalizeStick(value) {
+    global GamepadStickDeadzone
+    n := value / 32767.0
+    if (Abs(n) < GamepadStickDeadzone)
+        return 50
+    sign := n < 0 ? -1 : 1
+    magnitude := (Abs(n) - GamepadStickDeadzone) / (1.0 - GamepadStickDeadzone)
+    magnitude := Min(1.0, magnitude)
+    return Round(50 + sign * magnitude * 50)
+}
+
+ReadXInputState() {
+    global XI_DPAD_UP, XI_DPAD_DOWN, XI_DPAD_LEFT, XI_DPAD_RIGHT
+    global XI_START, XI_BACK, XI_LS, XI_RS, XI_LB, XI_RB, XI_A, XI_B, XI_X, XI_Y
+    global GamepadTriggerThreshold
+
+    state := GetXInputState()
+    if (!state)
+        return 0
+
+    buttons := NumGet(state, 4, "UShort")
+    return Map(
+        "A", !!(buttons & XI_A),
+        "B", !!(buttons & XI_B),
+        "X", !!(buttons & XI_X),
+        "Y", !!(buttons & XI_Y),
+        "LB", !!(buttons & XI_LB),
+        "RB", !!(buttons & XI_RB),
+        "Back", !!(buttons & XI_BACK),
+        "Start", !!(buttons & XI_START),
+        "LS", !!(buttons & XI_LS),
+        "RS", !!(buttons & XI_RS),
+        "LT", NumGet(state, 6, "UChar") >= GamepadTriggerThreshold,
+        "RT", NumGet(state, 7, "UChar") >= GamepadTriggerThreshold,
+        "DPadUp", !!(buttons & XI_DPAD_UP),
+        "DPadDown", !!(buttons & XI_DPAD_DOWN),
+        "DPadLeft", !!(buttons & XI_DPAD_LEFT),
+        "DPadRight", !!(buttons & XI_DPAD_RIGHT),
+        "LeftX", NormalizeStick(NumGet(state, 8, "Short")),
+        "LeftY", NormalizeStick(-NumGet(state, 10, "Short")),
+        "RightX", NormalizeStick(NumGet(state, 12, "Short")),
+        "RightY", NormalizeStick(-NumGet(state, 14, "Short"))
+    )
+}
+
+NormalizeButtonName(buttonName) {
+    global GamepadType, PSButtonToXbox
+    if (GamepadType = "PlayStation" && PSButtonToXbox.Has(buttonName))
+        return PSButtonToXbox[buttonName]
+    return buttonName
+}
+
+GetLegacyJoyState(buttonName) {
+    global GamepadButtonNumbers, GamepadJoyID
+
+    if (GamepadJoyID <= 0)
+        return false
+
     if (InStr(buttonName, "Joy") = 1) {
         buttonNum := SubStr(buttonName, 4)
-        try {
-            return GetKeyState("Joy" . buttonNum, "P")
-        }
+        try return !!GetKeyState(GamepadJoyID . "Joy" . buttonNum, "P")
         return false
     }
-    
-    ; Normalize button name for PlayStation controllers
-    if (GamepadType = "PlayStation" && PSButtonToXbox.Has(buttonName))
-        buttonName := PSButtonToXbox[buttonName]
-    
+
     if (!GamepadButtonNumbers.Has(buttonName))
         return false
-    
-    buttonCode := GamepadButtonNumbers[buttonName]
-    
-    ; Handle triggers (LT/RT) - use JoyZ axis
-    if (buttonCode = "TriggerL") {
+    code := GamepadButtonNumbers[buttonName]
+
+    if (code = "TriggerL" || code = "TriggerR") {
         try {
-            ; LT uses upper half of JoyZ (50-100 when pressed)
-            joyZ := GetKeyState("JoyZ", "P")
-            return (joyZ != "" && joyZ > 60)
-        }
-        return false
-    }
-    if (buttonCode = "TriggerR") {
-        try {
-            ; RT uses lower half of JoyZ (0-50 when pressed)
-            joyZ := GetKeyState("JoyZ", "P")
-            return (joyZ != "" && joyZ < 40)
-        }
-        return false
-    }
-    
-    ; Handle D-Pad (POV hat)
-    if (InStr(buttonCode, "POV") = 1) {
-        povValue := SubStr(buttonCode, 4)
-        try {
-            currentPOV := GetKeyState("JoyPOV", "P")
-            if (currentPOV = "")
+            z := GetKeyState(GamepadJoyID . "JoyZ", "P")
+            if (z = "")
                 return false
-            
-            ; POV returns -1 (centered) or 0-35900 (hundredths of degrees)
-            if (povValue = "0" && (currentPOV >= 0 && currentPOV < 4500 || currentPOV > 31500))
-                return true
-            if (povValue = "90" && currentPOV >= 4500 && currentPOV < 13500)
-                return true
-            if (povValue = "180" && currentPOV >= 13500 && currentPOV < 22500)
-                return true
-            if (povValue = "270" && currentPOV >= 22500 && currentPOV < 31500)
-                return true
+            return code = "TriggerL" ? z > 60 : z < 40
+        } catch {
+            return false
         }
-        return false
     }
-    
-    ; Handle regular buttons
-    try {
-        return GetKeyState("Joy" buttonCode, "P")
+
+    if (InStr(code, "POV") = 1) {
+        try {
+            pov := GetKeyState(GamepadJoyID . "JoyPOV", "P")
+            if (pov = "" || pov < 0)
+                return false
+            wanted := Integer(SubStr(code, 4))
+            if (wanted = 0)
+                return pov < 4500 || pov > 31500
+            return pov >= wanted * 100 - 4500 && pov < wanted * 100 + 4500
+        } catch {
+            return false
+        }
     }
-    
+
+    try return !!GetKeyState(GamepadJoyID . "Joy" . code, "P")
     return false
 }
 
-; Wait for gamepad button release
+; ===GAMEPAD BUTTON CHECK===
+IsGamepadButtonPressed(buttonName) {
+    global GamepadBackend
+    normalized := NormalizeButtonName(buttonName)
+
+    if (GamepadBackend = "XInput") {
+        state := ReadXInputState()
+        if (state && state.Has(normalized))
+            return state[normalized]
+        ; XInput disappeared or is not the right backend. Fall through.
+    }
+
+    if (GamepadBackend != "Joy")
+        EnsureGamepadInputSource()
+
+    if (GamepadBackend = "XInput") {
+        state := ReadXInputState()
+        if (state && state.Has(normalized))
+            return state[normalized]
+    }
+
+    return GetLegacyJoyState(buttonName)
+}
+
 WaitGamepadButtonRelease(buttonName) {
-    global GamepadButtonNumbers, GamepadType, PSButtonToXbox
-    
-    ; Handle direct JoyN format (e.g., "Joy11", "Joy12", etc.)
-    if (InStr(buttonName, "Joy") = 1) {
-        buttonNum := SubStr(buttonName, 4)
-        try {
-            while (GetKeyState("Joy" . buttonNum, "P")) {
-                Sleep(10)
+    while (IsGamepadButtonPressed(buttonName))
+        Sleep(10)
+}
+
+GetPressedGamepadButton() {
+    global GamepadBackend, GamepadJoyID, GamepadConnected
+
+    ; Capture must not depend on the status label. Try to acquire an input
+    ; source every time the user presses a button.
+    if (GamepadBackend = "XInput") {
+        state := ReadXInputState()
+        if (state) {
+            for name in ["A", "B", "X", "Y", "LB", "RB", "Back", "Start", "LS", "RS", "LT", "RT", "DPadUp", "DPadDown", "DPadLeft", "DPadRight"] {
+                if (state[name])
+                    return name
+            }
+            return ""
+        }
+    }
+
+    if (GamepadBackend != "Joy")
+        EnsureGamepadInputSource()
+
+    if (GamepadBackend = "XInput") {
+        state := ReadXInputState()
+        if (state) {
+            for name in ["A", "B", "X", "Y", "LB", "RB", "Back", "Start", "LS", "RS", "LT", "RT", "DPadUp", "DPadDown", "DPadLeft", "DPadRight"] {
+                if (state[name])
+                    return name
             }
         }
-        return
     }
-    
-    ; Normalize button name for PlayStation controllers
-    if (GamepadType = "PlayStation" && PSButtonToXbox.Has(buttonName))
-        buttonName := PSButtonToXbox[buttonName]
-    
-    if (!GamepadButtonNumbers.Has(buttonName))
-        return
-    
-    buttonCode := GamepadButtonNumbers[buttonName]
-    
-    ; Handle triggers (LT/RT)
-    if (buttonCode = "TriggerL" || buttonCode = "TriggerR") {
-        while (IsGamepadButtonPressed(buttonName)) {
-            Sleep(10)
+
+    if (GamepadJoyID <= 0)
+        CheckLegacyJoystickConnection()
+
+    ; If AHK cannot enumerate the Bluetooth DInput device, discover it from
+    ; the actual button press instead. This reproduces the useful behavior
+    ; of the original version without requiring a Connected status first.
+    if (GamepadJoyID <= 0)
+        return AcquireLegacyJoystickFromInput()
+
+    buttonMap := Map(1,"A", 2,"B", 3,"X", 4,"Y", 5,"LB", 6,"RB", 7,"Back", 8,"Start", 9,"LS", 10,"RS")
+    Loop 32 {
+        btnNum := A_Index
+        try {
+            if (GetKeyState(GamepadJoyID . "Joy" . btnNum, "P"))
+                return buttonMap.Has(btnNum) ? buttonMap[btnNum] : "Joy" . btnNum
         }
-        return
     }
-    
-    ; Handle D-Pad
-    if (InStr(buttonCode, "POV") = 1) {
-        while (IsGamepadButtonPressed(buttonName)) {
-            Sleep(10)
-        }
-        return
-    }
-    
-    ; Handle regular buttons
+
     try {
-        while (GetKeyState("Joy" buttonCode, "P")) {
-            Sleep(10)
+        z := GetKeyState(GamepadJoyID . "JoyZ", "P")
+        if (z != "") {
+            if (z > 60)
+                return "LT"
+            if (z < 40)
+                return "RT"
         }
     }
+
+    try {
+        pov := GetKeyState(GamepadJoyID . "JoyPOV", "P")
+        if (pov != "" && pov >= 0) {
+            if (pov < 4500 || pov > 31500)
+                return "DPadUp"
+            if (pov < 13500)
+                return "DPadRight"
+            if (pov < 22500)
+                return "DPadDown"
+            if (pov < 31500)
+                return "DPadLeft"
+        }
+    }
+    return ""
 }
 
 ; ===GAMEPAD INPUT HANDLER===
@@ -399,10 +665,10 @@ GamepadMenuHandler(*) {
         if (OCRScramblerBypassEnabled) {
             ; Get the slot number for the selected index
             slot := Icon_GetSlotByIndex(choice)
-            if (slot > 0) {
-                ; Execute the arrow sequence for this slot
-                RunScramblerMacro(slot)
-            }
+                if (slot > 0) {
+                    ; Execute the arrow sequence for this slot
+                    RunScramblerMacro(slot)
+                }
             
             ; Dispose captured icons after execution
             Icon_DisposeCapturedIcons()
@@ -444,95 +710,98 @@ GamepadMenuHandler(*) {
 WatchGamepad() {
     global SelectedSector, LastDrawnSector, LastDrawnMX, LastDrawnMY, ForceRadialRedraw
     global IsMenuVisible, ActiveStratagems, ScreenCX, ScreenCY, MenuSize, InnerRadius
-    global radialGui, GamepadNavigationStick
+    global radialGui, GamepadNavigationStick, GamepadBackend, GamepadJoyID
     global OCRScramblerBypassEnabled, ScramblerRadialMode
-    
+
     if (!IsMenuVisible)
         return
-    
-    ; In scrambler mode, check captured count
+
     if (OCRScramblerBypassEnabled && ScramblerRadialMode) {
         if Icon_GetCapturedCount() = 0
             return
-    } else {
-        if ActiveStratagems.Length = 0
-            return
+    } else if (ActiveStratagems.Length = 0) {
+        return
     }
-    
-    ; Get thumbstick position for selection based on selected stick
-    ; Left thumbstick: JoyX/JoyY, Right thumbstick: JoyR/U (0-100, center ~50)
-    ; D-Pad uses POV hat (returns angle in hundredths of degrees, -1 when centered)
-    try {
-        if (GamepadNavigationStick = "DPad") {
-            ; D-Pad uses POV hat
-            pov := GetKeyState("JoyPOV", "P")
-            if (pov = "" || pov < 0) {
-                ; Centered - no direction
-                joyX := 50
-                joyY := 50
+
+    joyX := 50
+    joyY := 50
+
+    if (GamepadBackend = "XInput") {
+        state := ReadXInputState()
+        if (state) {
+            if (GamepadNavigationStick = "DPad") {
+                if (state["DPadUp"])
+                    joyY := 0
+                else if (state["DPadDown"])
+                    joyY := 100
+                if (state["DPadLeft"])
+                    joyX := 0
+                else if (state["DPadRight"])
+                    joyX := 100
+            } else if (GamepadNavigationStick = "Right") {
+                joyX := state["RightX"]
+                joyY := state["RightY"]
             } else {
-            ; POV returns 0-35999 (hundredths of degrees)
-                ; 0 = Up, 9000 = Right, 18000 = Down, 27000 = Left
-                ; Convert angle to X/Y coordinates (0-100 range, 50 = center)
-                angleRad := pov * 3.14159 / 18000  ; Convert to radians
-                ; X: sin(angle) -> 0=left, 100=right
-                ; Y: -cos(angle) -> 0=up, 100=down
-                joyX := 50 + Round(50 * Sin(angleRad))
-                joyY := 50 - Round(50 * Cos(angleRad))
+                joyX := state["LeftX"]
+                joyY := state["LeftY"]
             }
-        } else if (GamepadNavigationStick = "Right") {
-            ; Right stick: JoyU is X-axis, JoyR is Y-axis (swapped compared to left stick)
-            joyX := Integer(GetKeyState("JoyU", "P"))
-            joyY := Integer(GetKeyState("JoyR", "P"))
-        } else {
-            ; Left stick uses JoyX and JoyY
-            joyX := Integer(GetKeyState("JoyX", "P"))
-            joyY := Integer(GetKeyState("JoyY", "P"))
         }
-    } catch {
-        joyX := 50
-        joyY := 50
+    } else {
+        try {
+            if (GamepadNavigationStick = "DPad") {
+                pov := GetKeyState(GamepadJoyID . "JoyPOV", "P")
+                if (pov != "" && pov >= 0) {
+                    angleRad := pov * 3.14159 / 18000
+                    joyX := 50 + Round(50 * Sin(angleRad))
+                    joyY := 50 - Round(50 * Cos(angleRad))
+                }
+            } else if (GamepadNavigationStick = "Right") {
+                joyX := Integer(GetKeyState(GamepadJoyID . "JoyU", "P"))
+                joyY := Integer(GetKeyState(GamepadJoyID . "JoyR", "P"))
+            } else {
+                joyX := Integer(GetKeyState(GamepadJoyID . "JoyX", "P"))
+                joyY := Integer(GetKeyState(GamepadJoyID . "JoyY", "P"))
+            }
+        } catch {
+            joyX := 50
+            joyY := 50
+        }
     }
-    
-    ; Convert to screen coordinates centered on screen
+
     centerX := ScreenCX
     centerY := ScreenCY
     halfSize := MenuSize // 2
-    
-    ; Map joystick position to screen position
-    ; JoyX/JoyY: 0 = left/up, 50 = center, 100 = right/down
-    ; Convert from 0-100 range to screen coordinates
     mx := centerX + ((joyX - 50) * halfSize // 50)
     my := centerY + ((joyY - 50) * halfSize // 50)
-    
-    ; Calculate distance and angle from center
+
     dx := mx - ScreenCX
     dy := my - ScreenCY
     dist := Sqrt(dx**2 + dy**2)
-    
-    ; Get count based on mode
+
     count := (OCRScramblerBypassEnabled && ScramblerRadialMode) ? Icon_GetCapturedCount() : ActiveStratagems.Length
     sectorAngle := 360 / count
-    
     newSector := 0
-    if dist > InnerRadius {
+    if (dist > InnerRadius) {
         angle := DllCall("msvcrt\atan2", "Double", dy, "Double", dx, "CDECL Double") * 180 / 3.14159
         angle := Mod(angle + 360 + (sectorAngle/2) + 90, 360)
         newSector := Floor(angle / sectorAngle) + 1
-        if newSector > count || newSector < 1
+        if (newSector > count || newSector < 1)
             newSector := 1
     }
-    
-    ; Redraw if needed
+
+    ; Keep active cooldown countdowns ticking even when the stick stays still
+    RequestCooldownRadialRedraw()
+
     if (ForceRadialRedraw || newSector != LastDrawnSector || Abs(mx - LastDrawnMX) > 3 || Abs(my - LastDrawnMY) > 3) {
-        if (IsSet(radialGui))
+        if (IsSet(radialGui)) {
             DrawRadial(ScreenCX, ScreenCY, mx, my, newSector)
+            RecordCooldownRadialRedraw()
+        }
         LastDrawnSector := newSector
         LastDrawnMX := mx
         LastDrawnMY := my
         ForceRadialRedraw := false
     }
-    
     SelectedSector := newSector
 }
 
@@ -542,12 +811,15 @@ SetGamepadHotkey() {
     
     ; Stop any polling timers first
     SetTimer(CheckGamepadPolling, 0)
+    SetTimer(UpdateGamepadDebugOverlay, 0)
+    UpdateGamepadDebugOverlay()
     
     ; When gamepad is enabled, use polling.
     if (!GamepadEnabled)
         return
 
     SetTimer(CheckGamepadPolling, 50)
+    SetTimer(UpdateGamepadDebugOverlay, 100)
 }
 
 ; Check D-Pad and Triggers for menu activation (polling)
@@ -558,12 +830,23 @@ CheckGamepadPolling() {
     if (!GamepadEnabled || IsMenuVisible)
         return
 
+    ; A controller can still send input even when Windows/AHK failed to
+    ; classify it correctly. Never block gameplay input because the status
+    ; text says "Disconnected".
+    if (!GamepadConnected || GamepadBackend = "None")
+        EnsureGamepadInputSource()
+
     ; Refresh connection/status periodically while polling is active (about once per second)
     statusTick++
     if (statusTick >= 20) {
         statusTick := 0
         CheckGamepadConnection()
     }
+
+    ; Confirm a pending cooldown deployment by gamepad button first, so a shared
+    ; button cannot also trigger another gamepad action on the same poll.
+    if (CheckCooldownDeploymentGamepadTrigger())
+        return
 
     ; OCR trigger by gamepad hold
     CheckOCRGamepadTrigger()
@@ -652,6 +935,7 @@ CheckOCRGamepadTrigger() {
 ; ===SAVE/LOAD GAMEPAD SETTINGS===
 LoadGamepadSettings() {
     global IniPath, GamepadEnabled, GamepadMenuButton, GamepadType, GamepadNavigationStick
+    global GamepadBackendMode, GamepadDebugMode
     global OCRGamepadButton, OCRUseHold, OCRHoldMs, BypassGamepadButton
     global BypassUseHold, BypassHoldMs
     
@@ -660,6 +944,10 @@ LoadGamepadSettings() {
         GamepadMenuButton := IniRead(IniPath, "Gamepad", "MenuButton", "RB")
         GamepadType := IniRead(IniPath, "Gamepad", "ControllerType", "Xbox")
         GamepadNavigationStick := IniRead(IniPath, "Gamepad", "NavigationStick", "Right")
+        GamepadBackendMode := IniRead(IniPath, "Gamepad", "Backend", "Auto")
+        if (GamepadBackendMode != "Auto" && GamepadBackendMode != "XInput" && GamepadBackendMode != "DirectInput")
+            GamepadBackendMode := "Auto"
+        GamepadDebugMode := IniRead(IniPath, "Gamepad", "DebugMode", "0") = "1"
         OCRGamepadButton := IniRead(IniPath, "OCR", "GamepadButton", "")
         OCRUseHold := IniRead(IniPath, "OCR", "OCRUseHold", "0") = "1"
         OCRHoldMs := Integer(IniRead(IniPath, "OCR", "OCRHoldMs", "700"))
@@ -672,6 +960,8 @@ LoadGamepadSettings() {
         GamepadMenuButton := "RB"
         GamepadType := "Xbox"
         GamepadNavigationStick := "Right"
+        GamepadBackendMode := "Auto"
+        GamepadDebugMode := false
         OCRGamepadButton := ""
         OCRUseHold := false
         OCRHoldMs := 700
@@ -963,18 +1253,20 @@ ShowOCRGamepadCapturePopup(*) {
     ; but write result to OCRGamepadButton.
     captureGui := Gui("-Caption +LastFound +AlwaysOnTop", Lang.Get("capture_ocr_gamepad_button"))
     captureGui.BackColor := "202020"
-    captureGui.SetFont("s10 cC4C4C4", "Segoe UI")
+    captureGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
     captureGui.MarginX := Scale(5)
     captureGui.MarginY := Scale(5)
 
-    captureGui.SetFont("cFFFFFF s12")
+    captureGui.SetFont("cFFFFFF s" Scale(12))
     captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", Lang.Get("capture_ocr_gamepad_button")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
-    captureGui.SetFont("s11 cC4C4C4")
+    captureGui.SetFont("s" Scale(11) " cC4C4C4")
 
     captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", Lang.Get("press_gamepad_button"))
     global ocrGamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", OCRGamepadButton = "" ? "[Not set]" : OCRGamepadButton)
-    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
+    ocrGamepadClearBtn := captureGui.Add("Button", "x" Scale(45) " y+25 w" Scale(110) " h" Scale(30), Lang.Get("clear"))
+    ocrGamepadClearBtn.OnEvent("Click", ClearOCRGamepadButtonFromCapturePopup)
+    captureGui.Add("Button", "x+" Scale(10) " yp w" Scale(110) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
 
     global ocrGamepadCaptureGui := captureGui
@@ -1004,103 +1296,17 @@ CaptureOCRGamepadButtonPopup() {
     }
 
     if (ocrGamepadCaptureWaiting) {
-        anyPressed := false
-        Loop 16 {
-            joyID := A_Index
-            Loop 32 {
-                try {
-                    if (GetKeyState(joyID . "Joy" . A_Index, "P")) {
-                        anyPressed := true
-                        break
-                    }
-                }
-            }
-            if (anyPressed)
-                break
-        }
-
-        if (!anyPressed) {
-            Loop 16 {
-                joyID := A_Index
-                try {
-                    joyZ := GetKeyState(joyID . "JoyZ", "P")
-                    if (joyZ != "" && (joyZ > 60 || joyZ < 40)) {
-                        anyPressed := true
-                        break
-                    }
-                }
-                try {
-                    pov := GetKeyState(joyID . "JoyPOV", "P")
-                    if (pov != "" && pov >= 0) {
-                        anyPressed := true
-                        break
-                    }
-                }
-            }
-        }
-
-        if (anyPressed)
+        if (GetPressedGamepadButton() != "")
             return
-
         ocrGamepadCaptureWaiting := false
         return
     }
 
-    try {
-        Loop 16 {
-            joyID := A_Index
-            Loop 32 {
-                btnNum := A_Index
-                try {
-                    if (GetKeyState(joyID . "Joy" . btnNum, "P")) {
-                        buttonMap := Map(1,"A", 2,"B", 3,"X", 4,"Y", 5,"LB", 6,"RB", 7,"Back", 8,"Start", 9,"LS", 10,"RS")
-                        if (buttonMap.Has(btnNum)) {
-                            CaptureOCRGamepadButtonPopupFound(buttonMap[btnNum])
-                            return
-                        }
-                        CaptureOCRGamepadButtonPopupFound("Joy" . btnNum)
-                        return
-                    }
-                }
-            }
+    buttonName := GetPressedGamepadButton()
+    if (buttonName = "")
+        return
 
-            try {
-                joyZ := GetKeyState(joyID . "JoyZ", "P")
-                if (joyZ != "") {
-                    if (joyZ > 60) {
-                        CaptureOCRGamepadButtonPopupFound("LT")
-                        return
-                    }
-                    if (joyZ < 40) {
-                        CaptureOCRGamepadButtonPopupFound("RT")
-                        return
-                    }
-                }
-            }
-
-            try {
-                pov := GetKeyState(joyID . "JoyPOV", "P")
-                if (pov != "" && pov >= 0) {
-                    if (pov >= 0 && pov < 4500 || pov > 31500) {
-                        CaptureOCRGamepadButtonPopupFound("DPadUp")
-                        return
-                    }
-                    if (pov >= 4500 && pov < 13500) {
-                        CaptureOCRGamepadButtonPopupFound("DPadRight")
-                        return
-                    }
-                    if (pov >= 13500 && pov < 22500) {
-                        CaptureOCRGamepadButtonPopupFound("DPadDown")
-                        return
-                    }
-                    if (pov >= 22500 && pov < 31500) {
-                        CaptureOCRGamepadButtonPopupFound("DPadLeft")
-                        return
-                    }
-                }
-            }
-        }
-    }
+    CaptureOCRGamepadButtonPopupFound(buttonName)
 }
 
 CaptureOCRGamepadButtonPopupFound(buttonName) {
@@ -1117,24 +1323,123 @@ CaptureOCRGamepadButtonPopupFound(buttonName) {
     SetTimer(() => (IsSet(ocrGamepadCaptureGui) && ocrGamepadCaptureGui ? ocrGamepadCaptureGui.Destroy() : 0), -500)
 }
 
+ClearOCRGamepadButtonFromCapturePopup(*) {
+    global OCRGamepadButton, ocrGamepadCaptureDisplay, ocrGamepadCaptureGui, IniPath
+    OCRGamepadButton := ""
+    try IniWrite(OCRGamepadButton, IniPath, "OCR", "GamepadButton")
+    if (IsSet(ocrGamepadCaptureDisplay) && ocrGamepadCaptureDisplay) {
+        try ocrGamepadCaptureDisplay.Value := "[Not set]"
+    }
+    if (IsSet(ocrGamepadCaptureGui) && ocrGamepadCaptureGui) {
+        try ocrGamepadCaptureGui.Destroy()
+    }
+}
+
+; ===COOLDOWN GAMEPAD BUTTON CAPTURE POPUP===
+ShowCooldownGamepadCapturePopup(*) {
+    global CooldownDeploymentGamepadButtonDraft
+
+    captureGui := Gui("-Caption +LastFound +AlwaysOnTop", Lang.Get("capture_cooldown_gamepad_button"))
+    captureGui.BackColor := "202020"
+    captureGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
+    captureGui.MarginX := Scale(5)
+    captureGui.MarginY := Scale(5)
+
+    captureGui.SetFont("cFFFFFF s" Scale(12))
+    captureGui.Add("Text", "x0 y0 w" Scale(300) " h" Scale(35) " Background2A2A2A Border +Center", Lang.Get("capture_cooldown_gamepad_button")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.SetFont("s" Scale(11) " cC4C4C4")
+
+    captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", Lang.Get("press_gamepad_button"))
+    global cooldownDeploymentGamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", CooldownDeploymentGamepadButtonDraft = "" ? Lang.Get("not_set") : CooldownDeploymentGamepadButtonDraft)
+    deploymentGamepadClearBtn := captureGui.Add("Button", "x" Scale(45) " y+25 w" Scale(110) " h" Scale(30), Lang.Get("clear"))
+    deploymentGamepadClearBtn.OnEvent("Click", ClearCooldownDeploymentGamepadButtonFromCapturePopup)
+    captureGui.Add("Button", "x+" Scale(10) " yp w" Scale(110) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
+    captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
+
+    global cooldownDeploymentGamepadCaptureGui := captureGui
+    global cooldownDeploymentGamepadCaptureTimer := true
+    global cooldownDeploymentGamepadCaptureWaiting := true
+    SetTimer(CaptureCooldownGamepadButtonPopup, 50)
+
+    captureGui.Show("w" Scale(340) " h" Scale(200))
+}
+
+CaptureCooldownGamepadButtonPopup() {
+    global cooldownDeploymentGamepadCaptureTimer, cooldownDeploymentGamepadCaptureGui, cooldownDeploymentGamepadCaptureWaiting
+
+    if (!cooldownDeploymentGamepadCaptureTimer)
+        return
+
+    try {
+        if (!IsSet(cooldownDeploymentGamepadCaptureGui) || !cooldownDeploymentGamepadCaptureGui || !WinExist("ahk_id " cooldownDeploymentGamepadCaptureGui.Hwnd)) {
+            cooldownDeploymentGamepadCaptureTimer := false
+            SetTimer(CaptureCooldownGamepadButtonPopup, 0)
+            return
+        }
+    } catch {
+        cooldownDeploymentGamepadCaptureTimer := false
+        SetTimer(CaptureCooldownGamepadButtonPopup, 0)
+        return
+    }
+
+    if (cooldownDeploymentGamepadCaptureWaiting) {
+        if (GetPressedGamepadButton() != "")
+            return
+        cooldownDeploymentGamepadCaptureWaiting := false
+        return
+    }
+
+    buttonName := GetPressedGamepadButton()
+    if (buttonName = "")
+        return
+
+    CaptureCooldownGamepadButtonPopupFound(buttonName)
+}
+
+ClearCooldownDeploymentGamepadButtonFromCapturePopup(*) {
+    global CooldownDeploymentGamepadButtonDraft, cooldownDeploymentGamepadCaptureDisplay, cooldownDeploymentGamepadCaptureGui
+    CooldownDeploymentGamepadButtonDraft := ""
+    if (IsSet(cooldownDeploymentGamepadCaptureDisplay) && cooldownDeploymentGamepadCaptureDisplay) {
+        try cooldownDeploymentGamepadCaptureDisplay.Value := Lang.Get("not_set")
+    }
+    if (IsSet(cooldownDeploymentGamepadCaptureGui) && cooldownDeploymentGamepadCaptureGui) {
+        try cooldownDeploymentGamepadCaptureGui.Destroy()
+    }
+}
+
+CaptureCooldownGamepadButtonPopupFound(buttonName) {
+    global cooldownDeploymentGamepadCaptureTimer, cooldownDeploymentGamepadCaptureGui, cooldownDeploymentGamepadCaptureDisplay
+    global CooldownDeploymentGamepadButtonDraft
+
+    cooldownDeploymentGamepadCaptureTimer := false
+    SetTimer(CaptureCooldownGamepadButtonPopup, 0)
+    cooldownDeploymentGamepadCaptureDisplay.Value := buttonName
+    CooldownDeploymentGamepadButtonDraft := buttonName
+
+    SetTimer(() => (IsSet(cooldownDeploymentGamepadCaptureGui) && cooldownDeploymentGamepadCaptureGui ? cooldownDeploymentGamepadCaptureGui.Destroy() : 0), -500)
+}
+
 ; ===BYPASS GAMEPAD BUTTON CAPTURE POPUP===
 ShowBypassGamepadCapturePopup(*) {
     global BypassGamepadButton
 
     captureGui := Gui("-Caption +LastFound +AlwaysOnTop", Lang.Get("capture_bypass_button"))
     captureGui.BackColor := "202020"
-    captureGui.SetFont("s10 cC4C4C4", "Segoe UI")
+    captureGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
     captureGui.MarginX := Scale(5)
     captureGui.MarginY := Scale(5)
 
-    captureGui.SetFont("cFFFFFF s12")
+    captureGui.SetFont("cFFFFFF s" Scale(12))
     captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", Lang.Get("capture_bypass_button")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
-    captureGui.SetFont("s11 cC4C4C4")
+    captureGui.SetFont("s" Scale(11) " cC4C4C4")
 
     captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", Lang.Get("press_gamepad_button"))
     global bypassGamepadCaptureDisplay := captureGui.Add("Text", "x" Scale(20) " y+10 w" Scale(280) " h" Scale(40) " Center cFFD700 Background333333", BypassGamepadButton = "" ? "[Not set]" : BypassGamepadButton)
-    captureGui.Add("Button", "x" Scale(110) " y+25 w" Scale(100) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
+    bypassGamepadClearBtn := captureGui.Add("Button", "x" Scale(45) " y+25 w" Scale(110) " h" Scale(30), Lang.Get("clear"))
+    bypassGamepadClearBtn.OnEvent("Click", ClearBypassGamepadButtonFromCapturePopup)
+    captureGui.Add("Button", "x+" Scale(10) " yp w" Scale(110) " h" Scale(30), Lang.Get("cancel")).OnEvent("Click", (*) => captureGui.Destroy())
     captureGui.OnEvent("Escape", (*) => captureGui.Destroy())
 
     global bypassGamepadCaptureGui := captureGui
@@ -1164,103 +1469,17 @@ CaptureBypassGamepadButtonPopup() {
     }
 
     if (bypassGamepadCaptureWaiting) {
-        anyPressed := false
-        Loop 16 {
-            joyID := A_Index
-            Loop 32 {
-                try {
-                    if (GetKeyState(joyID . "Joy" . A_Index, "P")) {
-                        anyPressed := true
-                        break
-                    }
-                }
-            }
-            if (anyPressed)
-                break
-        }
-
-        if (!anyPressed) {
-            Loop 16 {
-                joyID := A_Index
-                try {
-                    joyZ := GetKeyState(joyID . "JoyZ", "P")
-                    if (joyZ != "" && (joyZ > 60 || joyZ < 40)) {
-                        anyPressed := true
-                        break
-                    }
-                }
-                try {
-                    pov := GetKeyState(joyID . "JoyPOV", "P")
-                    if (pov != "" && pov >= 0) {
-                        anyPressed := true
-                        break
-                    }
-                }
-            }
-        }
-
-        if (anyPressed)
+        if (GetPressedGamepadButton() != "")
             return
-
         bypassGamepadCaptureWaiting := false
         return
     }
 
-    try {
-        Loop 16 {
-            joyID := A_Index
-            Loop 32 {
-                btnNum := A_Index
-                try {
-                    if (GetKeyState(joyID . "Joy" . btnNum, "P")) {
-                        buttonMap := Map(1,"A", 2,"B", 3,"X", 4,"Y", 5,"LB", 6,"RB", 7,"Back", 8,"Start", 9,"LS", 10,"RS")
-                        if (buttonMap.Has(btnNum)) {
-                            CaptureBypassGamepadButtonPopupFound(buttonMap[btnNum])
-                            return
-                        }
-                        CaptureBypassGamepadButtonPopupFound("Joy" . btnNum)
-                        return
-                    }
-                }
-            }
+    buttonName := GetPressedGamepadButton()
+    if (buttonName = "")
+        return
 
-            try {
-                joyZ := GetKeyState(joyID . "JoyZ", "P")
-                if (joyZ != "") {
-                    if (joyZ > 60) {
-                        CaptureBypassGamepadButtonPopupFound("LT")
-                        return
-                    }
-                    if (joyZ < 40) {
-                        CaptureBypassGamepadButtonPopupFound("RT")
-                        return
-                    }
-                }
-            }
-
-            try {
-                pov := GetKeyState(joyID . "JoyPOV", "P")
-                if (pov != "" && pov >= 0) {
-                    if (pov >= 0 && pov < 4500 || pov > 31500) {
-                        CaptureBypassGamepadButtonPopupFound("DPadUp")
-                        return
-                    }
-                    if (pov >= 4500 && pov < 13500) {
-                        CaptureBypassGamepadButtonPopupFound("DPadRight")
-                        return
-                    }
-                    if (pov >= 13500 && pov < 22500) {
-                        CaptureBypassGamepadButtonPopupFound("DPadDown")
-                        return
-                    }
-                    if (pov >= 22500 && pov < 31500) {
-                        CaptureBypassGamepadButtonPopupFound("DPadLeft")
-                        return
-                    }
-                }
-            }
-        }
-    }
+    CaptureBypassGamepadButtonPopupFound(buttonName)
 }
 
 CaptureBypassGamepadButtonPopupFound(buttonName) {
@@ -1277,6 +1496,125 @@ CaptureBypassGamepadButtonPopupFound(buttonName) {
     SetTimer(() => (IsSet(bypassGamepadCaptureGui) && bypassGamepadCaptureGui ? bypassGamepadCaptureGui.Destroy() : 0), -500)
 }
 
+ClearBypassGamepadButtonFromCapturePopup(*) {
+    global BypassGamepadButton, bypassGamepadCaptureDisplay, bypassGamepadCaptureGui, IniPath
+    BypassGamepadButton := ""
+    try IniWrite(BypassGamepadButton, IniPath, "OCR", "BypassGamepadButton")
+    if (IsSet(bypassGamepadCaptureDisplay) && bypassGamepadCaptureDisplay) {
+        try bypassGamepadCaptureDisplay.Value := "[Not set]"
+    }
+    if (IsSet(bypassGamepadCaptureGui) && bypassGamepadCaptureGui) {
+        try bypassGamepadCaptureGui.Destroy()
+    }
+}
+
+
+; ===GAMEPAD SETTINGS WINDOW===
+ShowGamepadSettings(*) {
+    global GamepadBackendMode, GamepadDebugMode, IniPath
+
+    settingsGui := Gui("-Caption +AlwaysOnTop +ToolWindow", "Gamepad Settings")
+    settingsGui.BackColor := "202020"
+    settingsGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
+    settingsGui.MarginX := Scale(10)
+    settingsGui.MarginY := Scale(10)
+
+    settingsGui.SetFont("cFFFFFF s" Scale(12))
+    title := settingsGui.Add("Text", "x0 y0 w" Scale(335) " h" Scale(36) " Background2A2A2A Border +Center", "Gamepad Settings")
+    title.OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
+    closeBtn := settingsGui.Add("Button", "x+5 y0 w" Scale(36) " h" Scale(36), "X")
+    closeBtn.OnEvent("Click", (*) => settingsGui.Destroy())
+    settingsGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
+
+    settingsGui.Add("Text", "x" Scale(15) " y" Scale(55) " w" Scale(100), "Input Backend:")
+    backendDDL := settingsGui.Add("DropDownList", "x+" Scale(10) " yp-4 w" Scale(120), ["Auto", "XInput", "DirectInput"])
+    backendDDL.Choose(GamepadBackendMode = "XInput" ? 2 : (GamepadBackendMode = "DirectInput" ? 3 : 1))
+
+    debugCheckbox := settingsGui.Add("CheckBox", "x" Scale(15) " y+20", "Gamepad Debug Mode")
+    debugCheckbox.Value := GamepadDebugMode
+    settingsGui.Add("Text", "x" Scale(15) " y+8 w" Scale(330) " c808080", "Shows live backend, controller, buttons and stick values.")
+
+    ; Centered: (window width Scale(376) - button width Scale(110)) / 2 = Scale(133)
+    saveBtn := settingsGui.Add("Button", "x" Scale(133) " y+25 w" Scale(110) " h" Scale(32), "Save")
+    saveBtn.OnEvent("Click", (*) => SaveGamepadSettingsWindow(settingsGui, backendDDL, debugCheckbox))
+    settingsGui.OnEvent("Escape", (*) => settingsGui.Destroy())
+
+    settingsGui.Show("w" Scale(376) " h" Scale(210))
+}
+
+SaveGamepadSettingsWindow(settingsGui, backendDDL, debugCheckbox) {
+    global GamepadBackendMode, GamepadDebugMode, IniPath
+
+    GamepadBackendMode := backendDDL.Text
+    GamepadDebugMode := !!debugCheckbox.Value
+    IniWrite(GamepadBackendMode, IniPath, "Gamepad", "Backend")
+    IniWrite(GamepadDebugMode ? "1" : "0", IniPath, "Gamepad", "DebugMode")
+
+    InitGamepad()
+    SetGamepadHotkey()
+    settingsGui.Destroy()
+}
+
+; ===GAMEPAD DEBUG OVERLAY===
+UpdateGamepadDebugOverlay() {
+    global GamepadDebugMode, GamepadEnabled, GamepadConnected, GamepadBackend
+    global GamepadXInputUser, GamepadJoyID, GamepadBackendMode, GamepadType
+    global GamepadNavigationStick
+    static debugGui := 0
+    static debugText := 0
+
+    if (!GamepadDebugMode) {
+        if (debugGui) {
+            try debugGui.Destroy()
+            debugGui := 0
+            debugText := 0
+        }
+        return
+    }
+
+    if (!debugGui) {
+        debugGui := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x20", "Gamepad Debug")
+        debugGui.BackColor := "101010"
+        debugGui.SetFont("s" Scale(9) " cFFFFFF", "Consolas")
+        debugText := debugGui.Add("Text", "x8 y8 w" Scale(330) " h" Scale(190))
+        debugGui.Show("x" (A_ScreenWidth - Scale(350)) " y" Scale(80) " w" Scale(350) " h" Scale(210) " NoActivate")
+    }
+
+    text := "Gamepad Debug`n"
+    text .= "Enabled: " (GamepadEnabled ? "Yes" : "No") "`n"
+    text .= "Requested: " GamepadBackendMode "`n"
+    text .= "Backend: " GamepadBackend "`n"
+    text .= "Connected: " (GamepadConnected ? "Yes" : "No") "`n"
+    text .= "Type: " GamepadType "`n"
+    if (GamepadBackend = "XInput")
+        text .= "XInput User: " (GamepadXInputUser + 1) "`n"
+    else
+        text .= "Joy ID: " GamepadJoyID "`n"
+
+    if (GamepadConnected) {
+        state := GamepadBackend = "XInput" ? ReadXInputState() : 0
+        if (state) {
+            text .= "A B X Y: " (state["A"]?"1":"0") " " (state["B"]?"1":"0") " " (state["X"]?"1":"0") " " (state["Y"]?"1":"0") "`n"
+            text .= "LB RB LT RT: " (state["LB"]?"1":"0") " " (state["RB"]?"1":"0") " " (state["LT"]?"1":"0") " " (state["RT"]?"1":"0") "`n"
+            text .= "DPad U/D/L/R: " (state["DPadUp"]?"1":"0") " " (state["DPadDown"]?"1":"0") " " (state["DPadLeft"]?"1":"0") " " (state["DPadRight"]?"1":"0") "`n"
+            text .= "Left Stick: " state["LeftX"] ", " state["LeftY"] "`n"
+            text .= "Right Stick: " state["RightX"] ", " state["RightY"]
+        } else if (GamepadBackend = "Joy") {
+            text .= "Menu: " (IsGamepadButtonPressed(GamepadMenuButton)?"PRESSED":"released") "`n"
+            text .= "Navigation: " GamepadNavigationStick "`n"
+            try {
+                if (GamepadNavigationStick = "Right")
+                    text .= "Right Stick: " Integer(GetKeyState(GamepadJoyID . "JoyU", "P")) ", " Integer(GetKeyState(GamepadJoyID . "JoyR", "P"))
+                else if (GamepadNavigationStick = "Left")
+                    text .= "Left Stick: " Integer(GetKeyState(GamepadJoyID . "JoyX", "P")) ", " Integer(GetKeyState(GamepadJoyID . "JoyY", "P"))
+                else
+                    text .= "DPad POV: " GetKeyState(GamepadJoyID . "JoyPOV", "P")
+            }
+        }
+    }
+    debugText.Value := text
+}
+
 ; ===GAMEPAD BUTTON CAPTURE POPUP===
 ShowGamepadCapturePopup(*) {
     global GamepadMenuButton, GamepadType, GamepadButtonNames
@@ -1284,15 +1622,15 @@ ShowGamepadCapturePopup(*) {
     ; Create capture popup
     captureGui := Gui("-Caption +LastFound +AlwaysOnTop", Lang.Get("capture_gamepad_button"))
     captureGui.BackColor := "202020"
-    captureGui.SetFont("s10 cC4C4C4", "Segoe UI")
+    captureGui.SetFont("s" Scale(10) " cC4C4C4", "Segoe UI")
     captureGui.MarginX := Scale(5)
     captureGui.MarginY := Scale(5)
     
     ; Title bar
-    captureGui.SetFont("cFFFFFF s12")
+    captureGui.SetFont("cFFFFFF s" Scale(12))
     captureGui.Add("Text", "x0 y0 w" Scale(280) " h" Scale(35) " Background2A2A2A Border +Center", Lang.Get("capture_gamepad_button")).OnEvent("Click", (*) => PostMessage(0xA1, 2,,, "A"))
     captureGui.Add("Button", "x+5 y0 w" Scale(35) " h" Scale(35), "X").OnEvent("Click", (*) => captureGui.Destroy())
-    captureGui.SetFont("s11 cC4C4C4")
+    captureGui.SetFont("s" Scale(11) " cC4C4C4")
     
     captureGui.Add("Text", "x" Scale(20) " y" Scale(50) " w" Scale(280) " Center", Lang.Get("press_gamepad_button"))
     
@@ -1315,13 +1653,11 @@ ShowGamepadCapturePopup(*) {
 
 ; Poll for gamepad button presses in popup
 CaptureGamepadButtonPopup() {
-    global gamepadCaptureTimer, gamepadCaptureGui, gamepadCaptureDisplay, gamepadCaptureWaiting
-    global GamepadMenuButton, gamepadMenuButtonDDL, GamepadButtonNames, GamepadType, IniPath
-    
+    global gamepadCaptureTimer, gamepadCaptureGui, gamepadCaptureWaiting
+
     if (!gamepadCaptureTimer)
         return
-    
-    ; Check if popup is still visible
+
     try {
         if (!IsSet(gamepadCaptureGui) || !gamepadCaptureGui || !WinExist("ahk_id " gamepadCaptureGui.Hwnd)) {
             gamepadCaptureTimer := false
@@ -1333,120 +1669,21 @@ CaptureGamepadButtonPopup() {
         SetTimer(CaptureGamepadButtonPopup, 0)
         return
     }
-    
-    ; First, wait for all buttons to be released
+
     if (gamepadCaptureWaiting) {
-        anyPressed := false
-        
-        ; Check all joysticks (1-16) for any button press
-        Loop 16 {
-            joyID := A_Index
-            Loop 32 {
-                try {
-                    if (GetKeyState(joyID . "Joy" . A_Index, "P")) {
-                        anyPressed := true
-                        break
-                    }
-                }
-            }
-            if (anyPressed)
-                break
-        }
-        
-        ; Also check triggers and D-Pad on all joysticks
-        if (!anyPressed) {
-            Loop 16 {
-                joyID := A_Index
-                try {
-                    joyZ := GetKeyState(joyID . "JoyZ", "P")
-                    if (joyZ != "" && (joyZ > 60 || joyZ < 40)) {
-                        anyPressed := true
-                        break
-                    }
-                }
-                try {
-                    pov := GetKeyState(joyID . "JoyPOV", "P")
-                    if (pov != "" && pov >= 0) {
-                        anyPressed := true
-                        break
-                    }
-                }
-            }
-        }
-        
-        if (anyPressed)
-            return  ; Still waiting for release
-        
-        ; All buttons released, now ready to capture
+        if (GetPressedGamepadButton() != "")
+            return
         gamepadCaptureWaiting := false
         return
     }
-    
-    ; Now check for button presses on all joysticks
-    try {
-        Loop 16 {
-            joyID := A_Index
-            
-            ; Check all buttons (1-32) on this joystick
-            Loop 32 {
-                btnNum := A_Index
-                try {
-                    if (GetKeyState(joyID . "Joy" . btnNum, "P")) {
-                        ; Find button name for this index
-                        buttonMap := Map(1,"A", 2,"B", 3,"X", 4,"Y", 5,"LB", 6,"RB", 7,"Back", 8,"Start", 9,"LS", 10,"RS")
-                        if (buttonMap.Has(btnNum)) {
-                            CaptureGamepadButtonPopupFound(buttonMap[btnNum])
-                            return
-                        }
-                        ; Button not in standard map - use JoyN format
-                        CaptureGamepadButtonPopupFound("Joy" . btnNum)
-                        return
-                    }
-                }
-            }
-            
-            ; Check triggers (LT/RT) on this joystick
-            try {
-                joyZ := GetKeyState(joyID . "JoyZ", "P")
-                if (joyZ != "") {
-                    if (joyZ > 60) {
-                        CaptureGamepadButtonPopupFound("LT")
-                        return
-                    }
-                    if (joyZ < 40) {
-                        CaptureGamepadButtonPopupFound("RT")
-                        return
-                    }
-                }
-            }
-            
-            ; Check D-Pad on this joystick
-            try {
-                pov := GetKeyState(joyID . "JoyPOV", "P")
-                if (pov != "" && pov >= 0) {
-                    if (pov >= 0 && pov < 4500 || pov > 31500) {
-                        CaptureGamepadButtonPopupFound("DPadUp")
-                        return
-                    }
-                    if (pov >= 4500 && pov < 13500) {
-                        CaptureGamepadButtonPopupFound("DPadRight")
-                        return
-                    }
-                    if (pov >= 13500 && pov < 22500) {
-                        CaptureGamepadButtonPopupFound("DPadDown")
-                        return
-                    }
-                    if (pov >= 22500 && pov < 31500) {
-                        CaptureGamepadButtonPopupFound("DPadLeft")
-                        return
-                    }
-                }
-            }
-        }
-    }
+
+    buttonName := GetPressedGamepadButton()
+    if (buttonName = "")
+        return
+
+    CaptureGamepadButtonPopupFound(buttonName)
 }
 
-; Handle captured button from popup
 CaptureGamepadButtonPopupFound(buttonName) {
     global gamepadCaptureTimer, gamepadCaptureGui, gamepadCaptureDisplay
     global GamepadMenuButton, gamepadMenuButtonDDL, GamepadButtonNames, GamepadType, IniPath, GamepadMenuButtonDDLValue
